@@ -5,15 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Weev - AI Agent Workflow Builder</title>
     
-    <!-- Favicon -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
-    
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- Base Styles -->
     <style>
         * {
             margin: 0;
@@ -22,7 +13,7 @@
         }
         
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #f8fafc;
             color: #1f2937;
             overflow: hidden;
@@ -30,136 +21,203 @@
             width: 100vw;
         }
         
-        /* Loading Screen */
-        .loading-screen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        /* Main Layout */
+        .app-container {
             display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 10000;
-            transition: opacity 0.5s ease, visibility 0.5s ease;
+            width: 100vw;
+            height: 100vh;
         }
         
-        .loading-screen.hidden {
-            opacity: 0;
-            visibility: hidden;
+        /* Components Panel */
+        .components-panel {
+            width: 300px;
+            height: 100vh;
+            background: white;
+            border-right: 1px solid #e5e7eb;
+            overflow-y: auto;
+            flex-shrink: 0;
         }
         
-        .loading-logo {
-            font-size: 4rem;
-            margin-bottom: 1rem;
-            animation: bounce 2s infinite;
+        /* Main Canvas Area */
+        .canvas-container {
+            flex: 1;
+            height: 100vh;
+            position: relative;
+            overflow: hidden;
         }
         
-        .loading-title {
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: white;
-            margin-bottom: 0.5rem;
-            text-align: center;
-        }
-        
-        .loading-subtitle {
-            font-size: 1.2rem;
-            color: rgba(255, 255, 255, 0.8);
-            margin-bottom: 2rem;
-            text-align: center;
-        }
-        
-        .loading-spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
-            border-top: 3px solid white;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        
-        .loading-status {
-            margin-top: 1rem;
-            color: rgba(255, 255, 255, 0.9);
-            font-size: 0.9rem;
-            text-align: center;
-        }
-        
-        @keyframes bounce {
-            0%, 20%, 50%, 80%, 100% {
-                transform: translateY(0);
-            }
-            40% {
-                transform: translateY(-10px);
-            }
-            60% {
-                transform: translateY(-5px);
-            }
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        /* Error Screen */
-        .error-screen {
-            position: fixed;
-            top: 0;
-            left: 0;
+        .canvas-workspace {
             width: 100%;
             height: 100%;
-            background: #fee2e2;
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-            padding: 2rem;
+            background: #f8fafc;
+            position: relative;
+            cursor: grab;
         }
         
-        .error-icon {
-            font-size: 4rem;
-            margin-bottom: 1rem;
-            color: #dc2626;
+        .canvas-workspace:active {
+            cursor: grabbing;
         }
         
-        .error-title {
-            font-size: 2rem;
+        /* Testing Panel */
+        .testing-panel {
+            width: 350px;
+            height: 100vh;
+            background: white;
+            border-left: 1px solid #e5e7eb;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+        
+        /* Panel Headers */
+        .panel-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #e5e7eb;
+            background: #f9fafb;
+        }
+        
+        .panel-title {
+            font-size: 18px;
             font-weight: 600;
-            color: #991b1b;
-            margin-bottom: 1rem;
-            text-align: center;
+            color: #111827;
+            margin: 0;
         }
         
-        .error-message {
-            font-size: 1rem;
-            color: #7f1d1d;
-            text-align: center;
-            max-width: 600px;
-            line-height: 1.6;
-            margin-bottom: 2rem;
+        .panel-subtitle {
+            font-size: 14px;
+            color: #6b7280;
+            margin: 4px 0 0 0;
         }
         
-        .error-actions {
+        /* Canvas Grid Background */
+        .canvas-workspace {
+            background-image: 
+                radial-gradient(circle, #e5e7eb 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        
+        /* Canvas Nodes */
+        .canvas-node {
+            position: absolute;
+            min-width: 200px;
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            user-select: none;
+            transition: all 0.2s ease;
+        }
+        
+        .canvas-node:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .canvas-node.selected {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        
+        .node-header {
             display: flex;
-            gap: 1rem;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
         }
         
+        .node-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+        
+        .node-title {
+            font-weight: 600;
+            color: #111827;
+        }
+        
+        .node-type {
+            font-size: 12px;
+            color: #6b7280;
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: auto;
+        }
+        
+        /* Connection handles */
+        .connection-handle {
+            width: 12px;
+            height: 12px;
+            border: 2px solid #6b7280;
+            border-radius: 50%;
+            background: white;
+            position: absolute;
+        }
+        
+        .handle-input {
+            left: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        .handle-output {
+            right: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        .connection-handle:hover {
+            border-color: #3b82f6;
+            background: #3b82f6;
+        }
+        
+        /* Status Messages */
+        .status-message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-weight: 500;
+            z-index: 1000;
+            display: none;
+        }
+        
+        .status-success {
+            background: #d1fae5;
+            border: 1px solid #10b981;
+            color: #065f46;
+        }
+        
+        .status-error {
+            background: #fee2e2;
+            border: 1px solid #ef4444;
+            color: #991b1b;
+        }
+        
+        .status-info {
+            background: #dbeafe;
+            border: 1px solid #3b82f6;
+            color: #1e40af;
+        }
+        
+        /* Buttons */
         .btn {
-            padding: 0.75rem 1.5rem;
+            padding: 8px 16px;
             border: none;
-            border-radius: 0.5rem;
+            border-radius: 6px;
             font-weight: 500;
             cursor: pointer;
             transition: all 0.2s ease;
-            text-decoration: none;
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 6px;
         }
         
         .btn-primary {
@@ -180,352 +238,49 @@
         .btn-secondary:hover {
             background: #e5e7eb;
         }
-        
-        /* Main Application Container */
-        .app-container {
-            width: 100%;
-            height: 100vh;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        /* Development Mode Indicator */
-        .dev-indicator {
-            position: fixed;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #f59e0b;
-            color: white;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 500;
-            z-index: 9998;
-            display: none;
-        }
-        
-        .dev-indicator.show {
-            display: block;
-        }
-        
-        /* Responsive Design */
-        @media (max-width: 1024px) {
-            .loading-title {
-                font-size: 2rem;
-            }
-            
-            .loading-subtitle {
-                font-size: 1rem;
-            }
-            
-            .error-title {
-                font-size: 1.5rem;
-            }
-            
-            .error-message {
-                font-size: 0.9rem;
-            }
-        }
-        
-        @media (max-width: 768px) {
-            .loading-logo {
-                font-size: 3rem;
-            }
-            
-            .loading-title {
-                font-size: 1.5rem;
-            }
-            
-            .loading-subtitle {
-                font-size: 0.9rem;
-            }
-            
-            .error-actions {
-                flex-direction: column;
-                width: 100%;
-                max-width: 300px;
-            }
-        }
     </style>
 </head>
 <body>
-    <!-- Loading Screen -->
-    <div class="loading-screen" id="loading-screen">
-        <div class="loading-logo">🧠</div>
-        <h1 class="loading-title">Weev</h1>
-        <p class="loading-subtitle">AI Agent Workflow Builder</p>
-        <div class="loading-spinner"></div>
-        <div class="loading-status" id="loading-status">Initializing application...</div>
-    </div>
-    
-    <!-- Error Screen -->
-    <div class="error-screen" id="error-screen">
-        <div class="error-icon">⚠️</div>
-        <h2 class="error-title">Application Failed to Load</h2>
-        <p class="error-message" id="error-message">
-            There was an error initializing the Weev application. Please check your browser console for more details.
-        </p>
-        <div class="error-actions">
-            <button class="btn btn-primary" onclick="location.reload()">
-                🔄 Reload Application
-            </button>
-            <button class="btn btn-secondary" onclick="toggleErrorDetails()">
-                📋 Show Details
-            </button>
-        </div>
-        <div id="error-details" style="display: none; margin-top: 2rem; padding: 1rem; background: rgba(0,0,0,0.1); border-radius: 0.5rem; font-family: monospace; font-size: 0.8rem; max-width: 800px; overflow: auto;"></div>
-    </div>
-    
-    <!-- Development Mode Indicator -->
-    <div class="dev-indicator" id="dev-indicator">
-        🚧 Development Mode
-    </div>
-    
     <!-- Main Application Container -->
-    <div class="app-container" id="app-container">
-        <!-- Application components will be dynamically inserted here -->
+    <div class="app-container">
+        
+        <!-- Components Panel (Left Side) -->
+        <div class="components-panel">
+            <div class="panel-header">
+                <h2 class="panel-title">Components</h2>
+                <p class="panel-subtitle">Drag nodes to canvas</p>
+            </div>
+            <div id="components-content">
+                <!-- Components will be rendered here by Components-Panel.ts -->
+            </div>
+        </div>
+        
+        <!-- Main Canvas Area (Center) -->
+        <div class="canvas-container">
+            <div id="canvas-workspace" class="canvas-workspace">
+                <!-- Canvas nodes will be rendered here by Canvas.ts -->
+            </div>
+        </div>
+        
+        <!-- Testing Panel (Right Side) -->
+        <div class="testing-panel">
+            <div class="panel-header">
+                <h2 class="panel-title">Testing</h2>
+                <p class="panel-subtitle">Execute and debug workflows</p>
+            </div>
+            <div id="testing-content">
+                <!-- Testing interface will be rendered here by Testing-Panel.ts -->
+            </div>
+        </div>
+        
     </div>
     
-    <!-- Application Scripts -->
-    <script type="module">
-        // Application initialization and error handling
-        class WeevAppLoader {
-            constructor() {
-                this.loadingScreen = document.getElementById('loading-screen');
-                this.errorScreen = document.getElementById('error-screen');
-                this.loadingStatus = document.getElementById('loading-status');
-                this.devIndicator = document.getElementById('dev-indicator');
-                
-                this.isDevelopment = window.location.hostname === 'localhost' || 
-                                   window.location.hostname === '127.0.0.1' ||
-                                   window.location.port !== '';
-                
-                if (this.isDevelopment) {
-                    this.devIndicator.classList.add('show');
-                }
-                
-                this.initializeApp();
-            }
-            
-            async initializeApp() {
-                try {
-                    this.updateLoadingStatus('Loading components...');
-                    
-                    // Check if required modules are available
-                    await this.checkDependencies();
-                    
-                    this.updateLoadingStatus('Initializing canvas...');
-                    await this.sleep(500);
-                    
-                    this.updateLoadingStatus('Setting up panels...');
-                    await this.sleep(500);
-                    
-                    this.updateLoadingStatus('Connecting to backend...');
-                    await this.sleep(500);
-                    
-                    // Import and initialize the main application
-                    const { WeevApp } = await import('./main.js');
-                    
-                    this.updateLoadingStatus('Starting application...');
-                    await this.sleep(300);
-                    
-                    // Initialize the main application
-                    const app = new WeevApp({
-                        backendUrl: this.getBackendUrl(),
-                        websocketUrl: this.getWebSocketUrl(),
-                        enableAutoSave: true
-                    });
-                    
-                    // Make app globally available for debugging
-                    window.weevApp = app;
-                    
-                    this.updateLoadingStatus('Ready!');
-                    await this.sleep(500);
-                    
-                    // Hide loading screen
-                    this.hideLoadingScreen();
-                    
-                    // Show success notification
-                    this.showNotification('Weev application loaded successfully!', 'success');
-                    
-                } catch (error) {
-                    console.error('Failed to initialize Weev application:', error);
-                    this.showError(error);
-                }
-            }
-            
-            async checkDependencies() {
-                // Check if browser supports required features
-                if (!window.WebSocket) {
-                    throw new Error('WebSocket support is required but not available in this browser.');
-                }
-                
-                if (!window.fetch) {
-                    throw new Error('Fetch API support is required but not available in this browser.');
-                }
-                
-                if (!document.querySelector) {
-                    throw new Error('Modern DOM API support is required but not available in this browser.');
-                }
-            }
-            
-            getBackendUrl() {
-                if (this.isDevelopment) {
-                    return 'http://localhost:8000';
-                }
-                return window.location.origin.replace(/:\d+$/, ':8000');
-            }
-            
-            getWebSocketUrl() {
-                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                if (this.isDevelopment) {
-                    return 'ws://localhost:8000/ws';
-                }
-                return `${protocol}//${window.location.host.replace(/:\d+$/, ':8000')}/ws`;
-            }
-            
-            updateLoadingStatus(message) {
-                this.loadingStatus.textContent = message;
-            }
-            
-            hideLoadingScreen() {
-                this.loadingScreen.classList.add('hidden');
-                setTimeout(() => {
-                    this.loadingScreen.style.display = 'none';
-                }, 500);
-            }
-            
-            showError(error) {
-                const errorMessage = document.getElementById('error-message');
-                const errorDetails = document.getElementById('error-details');
-                
-                errorMessage.textContent = error.message || 'An unknown error occurred while loading the application.';
-                errorDetails.textContent = error.stack || error.toString();
-                
-                this.loadingScreen.style.display = 'none';
-                this.errorScreen.style.display = 'flex';
-            }
-            
-            showNotification(message, type = 'info') {
-                const notification = document.createElement('div');
-                notification.className = `notification notification-${type}`;
-                
-                const colors = {
-                    success: { bg: '#d1fae5', border: '#10b981', text: '#065f46' },
-                    warning: { bg: '#fef3c7', border: '#f59e0b', text: '#92400e' },
-                    error: { bg: '#fee2e2', border: '#ef4444', text: '#991b1b' },
-                    info: { bg: '#dbeafe', border: '#3b82f6', text: '#1e40af' }
-                };
-                
-                const color = colors[type];
-                notification.style.cssText = `
-                    position: fixed;
-                    top: 20px;
-                    right: 20px;
-                    padding: 12px 16px;
-                    background: ${color.bg};
-                    border: 1px solid ${color.border};
-                    border-radius: 6px;
-                    color: ${color.text};
-                    font-weight: 500;
-                    z-index: 10001;
-                    max-width: 300px;
-                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-                    animation: slideInRight 0.3s ease-out;
-                `;
-                
-                notification.textContent = message;
-                document.body.appendChild(notification);
-                
-                // Auto-remove after 4 seconds
-                setTimeout(() => {
-                    notification.style.animation = 'slideOutRight 0.3s ease-in';
-                    setTimeout(() => {
-                        if (document.body.contains(notification)) {
-                            document.body.removeChild(notification);
-                        }
-                    }, 300);
-                }, 4000);
-            }
-            
-            sleep(ms) {
-                return new Promise(resolve => setTimeout(resolve, ms));
-            }
-        }
-        
-        // Global error handler
-        window.addEventListener('error', (event) => {
-            console.error('Global error:', event.error);
-            if (window.weevAppLoader) {
-                window.weevAppLoader.showError(event.error);
-            }
-        });
-        
-        window.addEventListener('unhandledrejection', (event) => {
-            console.error('Unhandled promise rejection:', event.reason);
-            if (window.weevAppLoader) {
-                window.weevAppLoader.showError(new Error(event.reason));
-            }
-        });
-        
-        // Global utility functions
-        window.toggleErrorDetails = function() {
-            const details = document.getElementById('error-details');
-            const button = event.target;
-            
-            if (details.style.display === 'none') {
-                details.style.display = 'block';
-                button.textContent = '📋 Hide Details';
-            } else {
-                details.style.display = 'none';
-                button.textContent = '📋 Show Details';
-            }
-        };
-        
-        // Initialize the application loader
-        document.addEventListener('DOMContentLoaded', () => {
-            window.weevAppLoader = new WeevAppLoader();
-        });
-        
-        // Add notification animations
-        const notificationStyles = `
-            @keyframes slideInRight {
-                from {
-                    transform: translateX(100%);
-                    opacity: 0;
-                }
-                to {
-                    transform: translateX(0);
-                    opacity: 1;
-                }
-            }
-            
-            @keyframes slideOutRight {
-                from {
-                    transform: translateX(0);
-                    opacity: 1;
-                }
-                to {
-                    transform: translateX(100%);
-                    opacity: 0;
-                }
-            }
-        `;
-        
-        const styleSheet = document.createElement('style');
-        styleSheet.textContent = notificationStyles;
-        document.head.appendChild(styleSheet);
-    </script>
+    <!-- Status Messages -->
+    <div id="status-message" class="status-message">
+        Status message will appear here
+    </div>
     
-    <!-- Service Worker Registration (for future PWA support) -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                // Service worker registration would go here for PWA support
-                console.log('Service worker support detected');
-            });
-        }
-    </script>
+    <!-- Load Application -->
+    <script type="module" src="main.js"></script>
 </body>
 </html>
