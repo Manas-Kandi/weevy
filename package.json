@@ -1,0 +1,16 @@
+{
+  "name": "weev-final",
+  "version": "1.0.0",
+  "description": "Weev final project",
+  "main": "Frontend/main.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "python3 -m http.server 3000",
+    "backend": "cd Backend && python3 -m uvicorn main:app --reload --port 8000"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.2"
+  },
+  "type": "module"
+}

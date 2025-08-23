@@ -1,0 +1,791 @@
+/**
+ * Testing-Panel.ts - Real-time Execution & Debugging Panel
+ * 
+ * Provides real-time workflow execution monitoring, streaming output display,
+ * and comprehensive debugging tools for AI agent workflows.
+ */
+
+// Import types - will be available when Canvas is properly exported
+export interface CanvasNode {
+  id: string;
+  type: 'BrainNode' | 'InputNode' | 'OutputNode' | 'KnowledgeBaseNode';
+  position: { x: number; y: number };
+  data: {
+    label: string;
+    configuration: Record<string, any>;
+    systemRules: string;
+  };
+  connections: {
+    inputs: string[];
+    outputs: string[];
+  };
+}
+
+export interface ExecutionResult {
+  nodeId: string;
+  nodeType: string;
+  input: any;
+  output: any;
+  executionTime: number;
+  timestamp: Date;
+  success: boolean;
+  error?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface WorkflowExecution {
+  id: string;
+  status: 'idle' | 'running' | 'completed' | 'error' | 'paused';
+  startTime: Date;
+  endTime?: Date;
+  currentNode?: string;
+  nodeResults: ExecutionResult[];
+  totalExecutionTime?: number;
+  streamingContent: string;
+}
+
+export class TestingPanel {
+  private container: HTMLElement;
+  private currentExecution: WorkflowExecution | null = null;
+  private executeWorkflowCallback: () => Promise<void>;
+  private isStreaming: boolean = false;
+  private streamingBuffer: string = '';
+  private autoScroll: boolean = true;
+
+  constructor(executeCallback: () => Promise<void>) {
+    this.executeWorkflowCallback = executeCallback;
+    this.container = this.createPanelContainer();
+    this.initializePanel();
+    this.setupEventListeners();
+  }
+
+  private createPanelContainer(): HTMLElement {
+    const panel = document.createElement('div');
+    panel.id = 'testing-panel';
+    panel.className = 'testing-panel';
+    panel.style.cssText = `
+      position: fixed;
+      right: 0;
+      top: 0;
+      width: 400px;
+      height: 100vh;
+      background: #ffffff;
+      border-left: 1px solid #e5e7eb;
+      box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+      display: flex;
+      flex-direction: column;
+      z-index: 1000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+    
+    document.body.appendChild(panel);
+    return panel;
+  }
+
+  private initializePanel(): void {
+    this.container.innerHTML = `
+      <!-- Panel Header -->
+      <div class="panel-header" style="
+        padding: 16px 20px;
+        border-bottom: 1px solid #e5e7eb;
+        background: #f9fafb;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      ">
+        <div>
+          <h2 style="
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: #111827;
+          ">Testing Panel</h2>
+          <p style="
+            margin: 4px 0 0 0;
+            font-size: 14px;
+            color: #6b7280;
+          ">Real-time execution & debugging</p>
+        </div>
+        
+        <!-- Control Buttons -->
+        <div class="panel-controls" style="display: flex; gap: 8px;">
+          <button id="clear-output" class="control-btn" style="
+            padding: 6px 12px;
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            color: #374151;
+          ">Clear</button>
+          <button id="toggle-panel" class="control-btn" style="
+            padding: 6px 8px;
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            color: #374151;
+          ">−</button>
+        </div>
+      </div>
+
+      <!-- Execution Controls -->
+      <div class="execution-controls" style="
+        padding: 16px 20px;
+        border-bottom: 1px solid #f3f4f6;
+        background: white;
+      ">
+        <div class="execution-buttons" style="
+          display: flex;
+          gap: 8px;
+          margin-bottom: 12px;
+        ">
+          <button id="run-workflow" class="btn btn-primary" style="
+            flex: 1;
+            padding: 10px 16px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+          ">
+            <span class="btn-icon">▶</span>
+            <span class="btn-text">Run Workflow</span>
+          </button>
+          
+          <button id="pause-workflow" class="btn btn-secondary" disabled style="
+            padding: 10px 12px;
+            background: #f59e0b;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            opacity: 0.5;
+          ">⏸</button>
+          
+          <button id="stop-workflow" class="btn btn-secondary" disabled style="
+            padding: 10px 12px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            opacity: 0.5;
+          ">⏹</button>
+        </div>
+        
+        <!-- Execution Status -->
+        <div class="execution-status" style="
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 14px;
+        ">
+          <div id="status-indicator" style="
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #d1d5db;
+          "></div>
+          <span id="status-text" style="color: #6b7280;">Ready to execute</span>
+          <div id="execution-time" style="
+            margin-left: auto;
+            font-size: 12px;
+            color: #9ca3af;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+          "></div>
+        </div>
+      </div>
+
+      <!-- Tab Navigation -->
+      <div class="tab-navigation" style="
+        display: flex;
+        background: #f9fafb;
+        border-bottom: 1px solid #e5e7eb;
+      ">
+        <button class="tab-btn active" data-tab="output" style="
+          flex: 1;
+          padding: 12px 16px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          font-weight: 500;
+          color: #374151;
+          border-bottom: 2px solid #3b82f6;
+        ">Output</button>
+        <button class="tab-btn" data-tab="results" style="
+          flex: 1;
+          padding: 12px 16px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          font-weight: 500;
+          color: #6b7280;
+          border-bottom: 2px solid transparent;
+        ">Results</button>
+        <button class="tab-btn" data-tab="metrics" style="
+          flex: 1;
+          padding: 12px 16px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          font-weight: 500;
+          color: #6b7280;
+          border-bottom: 2px solid transparent;
+        ">Metrics</button>
+      </div>
+
+      <!-- Tab Content -->
+      <div class="tab-content" style="flex: 1; overflow: hidden; position: relative;">
+        <!-- Output Tab (Live Stream) -->
+        <div id="output-tab" class="tab-panel active" style="
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+        ">
+          <div class="output-controls" style="
+            padding: 12px 16px;
+            background: #1f2937;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: between;
+            font-size: 12px;
+          ">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="color: #10b981;">●</span>
+              <span>Live Output</span>
+            </div>
+            <div style="margin-left: auto; display: flex; gap: 8px;">
+              <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                <input type="checkbox" id="auto-scroll" checked style="width: 12px; height: 12px;">
+                <span>Auto-scroll</span>
+              </label>
+              <button id="clear-stream" style="
+                background: none;
+                border: 1px solid #374151;
+                color: #d1d5db;
+                padding: 2px 6px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 11px;
+              ">Clear</button>
+            </div>
+          </div>
+          
+          <div id="stream-output" style="
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            background: #1f2937;
+            color: #f9fafb;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+          ">
+            <div class="stream-placeholder" style="
+              color: #6b7280;
+              text-align: center;
+              padding: 40px 20px;
+            ">
+              <div style="font-size: 24px; margin-bottom: 8px;">📡</div>
+              <div>Waiting for workflow execution...</div>
+              <div style="font-size: 11px; margin-top: 4px;">Live output will appear here</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Results Tab -->
+        <div id="results-tab" class="tab-panel" style="
+          height: 100%;
+          overflow-y: auto;
+          display: none;
+        ">
+          <div id="results-container" style="padding: 16px;">
+            <div class="results-placeholder" style="
+              text-align: center;
+              color: #6b7280;
+              padding: 40px 20px;
+            ">
+              <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
+              <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600;">No Results Yet</h3>
+              <p style="margin: 0; font-size: 14px;">Execute a workflow to see detailed node results</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Metrics Tab -->
+        <div id="metrics-tab" class="tab-panel" style="
+          height: 100%;
+          overflow-y: auto;
+          padding: 16px;
+          display: none;
+        ">
+          <div id="metrics-container">
+            <div class="metrics-placeholder" style="
+              text-align: center;
+              color: #6b7280;
+              padding: 40px 20px;
+            ">
+              <div style="font-size: 48px; margin-bottom: 16px;">⚡</div>
+              <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600;">No Metrics Available</h3>
+              <p style="margin: 0; font-size: 14px;">Performance metrics will appear after execution</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Streaming Indicator -->
+      <div id="streaming-indicator" style="
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 16px 24px;
+        border-radius: 8px;
+        display: none;
+        align-items: center;
+        gap: 12px;
+        z-index: 200;
+      ">
+        <div class="spinner" style="
+          width: 16px;
+          height: 16px;
+          border: 2px solid #374151;
+          border-top: 2px solid #3b82f6;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        "></div>
+        <span>Streaming content...</span>
+      </div>
+    `;
+
+    // Add spinner animation
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  private setupEventListeners(): void {
+    // Execution controls
+    const runBtn = this.container.querySelector('#run-workflow') as HTMLElement;
+    const pauseBtn = this.container.querySelector('#pause-workflow') as HTMLElement;
+    const stopBtn = this.container.querySelector('#stop-workflow') as HTMLElement;
+    
+    runBtn.addEventListener('click', this.handleRunWorkflow.bind(this));
+    pauseBtn.addEventListener('click', this.handlePauseWorkflow.bind(this));
+    stopBtn.addEventListener('click', this.handleStopWorkflow.bind(this));
+
+    // Panel controls
+    const clearBtn = this.container.querySelector('#clear-output') as HTMLElement;
+    const toggleBtn = this.container.querySelector('#toggle-panel') as HTMLElement;
+    const clearStreamBtn = this.container.querySelector('#clear-stream') as HTMLElement;
+    
+    clearBtn.addEventListener('click', this.clearAllOutput.bind(this));
+    toggleBtn.addEventListener('click', this.togglePanel.bind(this));
+    clearStreamBtn.addEventListener('click', this.clearStreamOutput.bind(this));
+
+    // Auto-scroll checkbox
+    const autoScrollCheckbox = this.container.querySelector('#auto-scroll') as HTMLInputElement;
+    autoScrollCheckbox.addEventListener('change', (e) => {
+      this.autoScroll = (e.target as HTMLInputElement).checked;
+    });
+
+    // Tab navigation
+    const tabBtns = this.container.querySelectorAll('.tab-btn');
+    tabBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        const tabName = target.dataset.tab;
+        if (tabName) {
+          this.switchTab(tabName);
+        }
+      });
+    });
+  }
+
+  private async handleRunWorkflow(): Promise<void> {
+    if (this.currentExecution?.status === 'running') {
+      return; // Already running
+    }
+
+    this.startExecution();
+    
+    try {
+      await this.executeWorkflowCallback();
+    } catch (error) {
+      console.error('Workflow execution failed:', error);
+      this.addCustomLog(`Execution failed: ${error}`, 'error');
+      this.updateExecutionStatus('error', `Error: ${error}`);
+    }
+  }
+
+  private handlePauseWorkflow(): void {
+    if (this.currentExecution?.status === 'running') {
+      this.currentExecution.status = 'paused';
+      this.updateExecutionStatus('paused', 'Execution paused');
+      this.updateControlButtons();
+    }
+  }
+
+  private handleStopWorkflow(): void {
+    if (this.currentExecution) {
+      this.currentExecution.status = 'idle';
+      this.currentExecution.endTime = new Date();
+      this.updateExecutionStatus('idle', 'Execution stopped');
+      this.updateControlButtons();
+      this.hideStreamingIndicator();
+    }
+  }
+
+  private startExecution(): void {
+    this.currentExecution = {
+      id: `exec_${Date.now()}`,
+      status: 'running',
+      startTime: new Date(),
+      nodeResults: [],
+      streamingContent: ''
+    };
+
+    this.updateExecutionStatus('running', 'Executing workflow...');
+    this.updateControlButtons();
+    this.clearStreamOutput();
+    this.switchTab('output'); // Switch to output tab when starting
+  }
+
+  private updateExecutionStatus(status: WorkflowExecution['status'], message: string): void {
+    const statusIndicator = this.container.querySelector('#status-indicator') as HTMLElement;
+    const statusText = this.container.querySelector('#status-text') as HTMLElement;
+    const executionTime = this.container.querySelector('#execution-time') as HTMLElement;
+
+    const colors = {
+      idle: '#d1d5db',
+      running: '#3b82f6',
+      completed: '#10b981',
+      error: '#ef4444',
+      paused: '#f59e0b'
+    };
+
+    statusIndicator.style.background = colors[status];
+    statusText.textContent = message;
+
+    if (this.currentExecution && status === 'running') {
+      const elapsed = Date.now() - this.currentExecution.startTime.getTime();
+      executionTime.textContent = `${(elapsed / 1000).toFixed(1)}s`;
+    }
+  }
+
+  private updateControlButtons(): void {
+    const runBtn = this.container.querySelector('#run-workflow') as HTMLButtonElement;
+    const pauseBtn = this.container.querySelector('#pause-workflow') as HTMLButtonElement;
+    const stopBtn = this.container.querySelector('#stop-workflow') as HTMLButtonElement;
+
+    const isRunning = this.currentExecution?.status === 'running';
+    const isPaused = this.currentExecution?.status === 'paused';
+
+    if (isRunning) {
+      runBtn.style.opacity = '0.5';
+      runBtn.style.cursor = 'not-allowed';
+      pauseBtn.style.opacity = '1';
+      pauseBtn.style.cursor = 'pointer';
+      pauseBtn.disabled = false;
+      stopBtn.style.opacity = '1';
+      stopBtn.style.cursor = 'pointer';
+      stopBtn.disabled = false;
+    } else {
+      runBtn.style.opacity = '1';
+      runBtn.style.cursor = 'pointer';
+      pauseBtn.style.opacity = '0.5';
+      pauseBtn.style.cursor = 'not-allowed';
+      pauseBtn.disabled = true;
+      stopBtn.style.opacity = '0.5';
+      stopBtn.style.cursor = 'not-allowed';
+      stopBtn.disabled = true;
+    }
+  }
+
+  private switchTab(tabName: string): void {
+    // Update tab buttons
+    const tabBtns = this.container.querySelectorAll('.tab-btn');
+    tabBtns.forEach(btn => {
+      const button = btn as HTMLElement;
+      if (button.dataset.tab === tabName) {
+        button.classList.add('active');
+        button.style.color = '#374151';
+        button.style.borderBottomColor = '#3b82f6';
+      } else {
+        button.classList.remove('active');
+        button.style.color = '#6b7280';
+        button.style.borderBottomColor = 'transparent';
+      }
+    });
+
+    // Update tab panels
+    const tabPanels = this.container.querySelectorAll('.tab-panel');
+    tabPanels.forEach(panel => {
+      const panelElement = panel as HTMLElement;
+      if (panelElement.id === `${tabName}-tab`) {
+        panelElement.style.display = 'flex';
+        panelElement.classList.add('active');
+      } else {
+        panelElement.style.display = 'none';
+        panelElement.classList.remove('active');
+      }
+    });
+  }
+
+  // Public methods for external integration
+  public addNodeResult(result: ExecutionResult): void {
+    if (this.currentExecution) {
+      this.currentExecution.nodeResults.push(result);
+      this.renderNodeResult(result);
+      this.removePlaceholder('results');
+    }
+  }
+
+  public addCustomLog(message: string, level: 'info' | 'warning' | 'error' | 'success' = 'info'): void {
+    const timestamp = new Date().toLocaleTimeString();
+    const colors = {
+      info: '#3b82f6',
+      warning: '#f59e0b',
+      error: '#ef4444',
+      success: '#10b981'
+    };
+
+    const logMessage = `[${timestamp}] [${level.toUpperCase()}] ${message}\n`;
+    this.appendToStream(logMessage, colors[level]);
+  }
+
+  public appendStreamContent(content: string): void {
+    this.streamingBuffer += content;
+    this.appendToStream(content);
+    this.showStreamingIndicator();
+  }
+
+  public updatePerformanceMetrics(metrics: Record<string, string | number>): void {
+    const metricsContainer = this.container.querySelector('#metrics-container') as HTMLElement;
+    this.removePlaceholder('metrics');
+
+    let metricsHtml = '<div class="metrics-grid" style="display: grid; gap: 16px;">';
+    
+    Object.entries(metrics).forEach(([key, value]) => {
+      metricsHtml += `
+        <div class="metric-card" style="
+          padding: 16px;
+          background: #f9fafb;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+        ">
+          <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">${key}</div>
+          <div style="font-size: 18px; font-weight: 600; color: #111827;">${value}</div>
+        </div>
+      `;
+    });
+    
+    metricsHtml += '</div>';
+    metricsContainer.innerHTML = metricsHtml;
+  }
+
+  private appendToStream(content: string, color?: string): void {
+    const streamOutput = this.container.querySelector('#stream-output') as HTMLElement;
+    this.removePlaceholder('output');
+
+    const contentElement = document.createElement('span');
+    contentElement.textContent = content;
+    if (color) {
+      contentElement.style.color = color;
+    }
+
+    streamOutput.appendChild(contentElement);
+
+    if (this.autoScroll) {
+      streamOutput.scrollTop = streamOutput.scrollHeight;
+    }
+  }
+
+  private renderNodeResult(result: ExecutionResult): void {
+    const resultsContainer = this.container.querySelector('#results-container') as HTMLElement;
+    
+    const resultElement = document.createElement('div');
+    resultElement.className = 'node-result';
+    resultElement.style.cssText = `
+      margin-bottom: 16px;
+      padding: 16px;
+      background: ${result.success ? '#f0fdf4' : '#fef2f2'};
+      border: 1px solid ${result.success ? '#bbf7d0' : '#fecaca'};
+      border-radius: 8px;
+      border-left: 4px solid ${result.success ? '#10b981' : '#ef4444'};
+    `;
+
+    resultElement.innerHTML = `
+      <div class="result-header" style="
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      ">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-weight: 600; color: #111827;">${result.nodeType}</span>
+          <span style="
+            font-size: 11px;
+            color: #6b7280;
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+          ">${result.nodeId}</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-size: 12px; color: #6b7280;">${result.executionTime}ms</span>
+          <span style="
+            font-size: 12px;
+            color: ${result.success ? '#059669' : '#dc2626'};
+            font-weight: 500;
+          ">${result.success ? '✓ Success' : '✗ Error'}</span>
+        </div>
+      </div>
+      
+      <div class="result-content" style="
+        background: rgba(0, 0, 0, 0.05);
+        padding: 12px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        max-height: 200px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+      ">
+        ${result.success ? this.formatContent(result.output) : result.error}
+      </div>
+      
+      <div style="
+        font-size: 11px;
+        color: #9ca3af;
+        margin-top: 8px;
+        text-align: right;
+      ">${result.timestamp.toLocaleTimeString()}</div>
+    `;
+
+    resultsContainer.appendChild(resultElement);
+  }
+
+  private formatContent(content: any): string {
+    if (typeof content === 'string') {
+      return content;
+    }
+    return JSON.stringify(content, null, 2);
+  }
+
+  private removePlaceholder(tab: string): void {
+    const placeholder = this.container.querySelector(`.${tab}-placeholder`);
+    if (placeholder) {
+      placeholder.remove();
+    }
+  }
+
+  private clearAllOutput(): void {
+    this.clearStreamOutput();
+    this.clearResults();
+    this.clearMetrics();
+  }
+
+  private clearStreamOutput(): void {
+    const streamOutput = this.container.querySelector('#stream-output') as HTMLElement;
+    streamOutput.innerHTML = `
+      <div class="stream-placeholder" style="
+        color: #6b7280;
+        text-align: center;
+        padding: 40px 20px;
+      ">
+        <div style="font-size: 24px; margin-bottom: 8px;">📡</div>
+        <div>Waiting for workflow execution...</div>
+        <div style="font-size: 11px; margin-top: 4px;">Live output will appear here</div>
+      </div>
+    `;
+    this.streamingBuffer = '';
+  }
+
+  private clearResults(): void {
+    const resultsContainer = this.container.querySelector('#results-container') as HTMLElement;
+    resultsContainer.innerHTML = `
+      <div class="results-placeholder" style="
+        text-align: center;
+        color: #6b7280;
+        padding: 40px 20px;
+      ">
+        <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
+        <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600;">No Results Yet</h3>
+        <p style="margin: 0; font-size: 14px;">Execute a workflow to see detailed node results</p>
+      </div>
+    `;
+  }
+
+  private clearMetrics(): void {
+    const metricsContainer = this.container.querySelector('#metrics-container') as HTMLElement;
+    metricsContainer.innerHTML = `
+      <div class="metrics-placeholder" style="
+        text-align: center;
+        color: #6b7280;
+        padding: 40px 20px;
+      ">
+        <div style="font-size: 48px; margin-bottom: 16px;">⚡</div>
+        <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600;">No Metrics Available</h3>
+        <p style="margin: 0; font-size: 14px;">Performance metrics will appear after execution</p>
+      </div>
+    `;
+  }
+
+  private showStreamingIndicator(): void {
+    const indicator = this.container.querySelector('#streaming-indicator') as HTMLElement;
+    indicator.style.display = 'flex';
+    this.isStreaming = true;
+  }
+
+  private hideStreamingIndicator(): void {
+    const indicator = this.container.querySelector('#streaming-indicator') as HTMLElement;
+    indicator.style.display = 'none';
+    this.isStreaming = false;
+  }
+
+  private togglePanel(): void {
+    const toggleBtn = this.container.querySelector('#toggle-panel') as HTMLElement;
+    const panelContent = this.container.querySelector('.panel-content') as HTMLElement;
+    
+    if (this.container.style.height === '60px') {
+      // Expand
+      this.container.style.height = '100vh';
+      toggleBtn.textContent = '−';
+    } else {
+      // Collapse
+      this.container.style.height = '60px';
+      toggleBtn.textContent = '+';
+    }
+  }
+
+  // Public API methods
+  public getCurrentExecution(): WorkflowExecution | null {
+    return this.currentExecution;
+  }
+
+  public getExecutionHistory(): ExecutionResult[] {
+    return this.currentExecution?.nodeResults || [];
+  }
+
+  public isExecuting(): boolean {
+    return this.currentExecution?.status === 'running';
+  }
+}

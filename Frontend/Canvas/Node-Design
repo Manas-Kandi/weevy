@@ -1,0 +1,851 @@
+/**
+ * Node-Design.ts - Visual Node Components and Styling
+ * 
+ * Defines the visual appearance and interaction patterns for different node types.
+ * Supports real-time execution visualization and connection management.
+ */
+
+import { CanvasNode, CanvasConnection } from './Canvas';
+
+export interface NodeTheme {
+  backgroundColor: string;
+  borderColor: string;
+  headerColor: string;
+  textColor: string;
+  iconColor: string;
+  shadowColor: string;
+}
+
+export interface NodeExecutionState {
+  status: 'idle' | 'executing' | 'completed' | 'error' | 'streaming';
+  progress?: number;
+  currentStep?: string;
+  error?: string;
+  streamContent?: string;
+}
+
+export class NodeDesign {
+  private themes: Record<CanvasNode['type'], NodeTheme> = {
+    'BrainNode': {
+      backgroundColor: '#ffffff',
+      borderColor: '#8b5cf6',
+      headerColor: '#8b5cf6',
+      textColor: '#111827',
+      iconColor: '#ffffff',
+      shadowColor: 'rgba(139, 92, 246, 0.15)'
+    },
+    'InputNode': {
+      backgroundColor: '#ffffff', 
+      borderColor: '#10b981',
+      headerColor: '#10b981',
+      textColor: '#111827',
+      iconColor: '#ffffff',
+      shadowColor: 'rgba(16, 185, 129, 0.15)'
+    },
+    'OutputNode': {
+      backgroundColor: '#ffffff',
+      borderColor: '#f59e0b', 
+      headerColor: '#f59e0b',
+      textColor: '#111827',
+      iconColor: '#ffffff',
+      shadowColor: 'rgba(245, 158, 11, 0.15)'
+    },
+    'KnowledgeBaseNode': {
+      backgroundColor: '#ffffff',
+      borderColor: '#3b82f6',
+      headerColor: '#3b82f6', 
+      textColor: '#111827',
+      iconColor: '#ffffff',
+      shadowColor: 'rgba(59, 130, 246, 0.15)'
+    }
+  };
+
+  private executionStates: Map<string, NodeExecutionState> = new Map();
+  
+  constructor() {
+    this.injectNodeStyles();
+  }
+
+  /**
+   * Creates a new node DOM element with proper styling and interactions
+   */
+  public createNodeElement(node: CanvasNode): HTMLElement {
+    const theme = this.themes[node.type];
+    
+    const nodeElement = document.createElement('div');
+    nodeElement.id = `node-${node.id}`;
+    nodeElement.className = `canvas-node canvas-node-${node.type.toLowerCase()}`;
+    nodeElement.dataset.nodeId = node.id;
+    nodeElement.dataset.nodeType = node.type;
+    
+    this.applyNodeStyles(nodeElement, theme, node);
+    
+    nodeElement.innerHTML = this.generateNodeHTML(node, theme);
+    
+    this.setupNodeInteractions(nodeElement, node);
+    
+    return nodeElement;
+  }
+
+  /**
+   * Updates node visual state during execution
+   */
+  public updateNodeExecutionState(nodeId: string, state: NodeExecutionState): void {
+    this.executionStates.set(nodeId, state);
+    
+    const nodeElement = document.getElementById(`node-${nodeId}`);
+    if (!nodeElement) return;
+    
+    this.updateExecutionVisuals(nodeElement, state);
+    this.updateExecutionIndicator(nodeElement, state);
+    
+    if (state.status === 'streaming' && state.streamContent) {
+      this.updateStreamingContent(nodeElement, state.streamContent);
+    }
+  }
+
+  /**
+   * Creates connection line between nodes
+   */
+  public createConnectionElement(connection: CanvasConnection, sourceNode: CanvasNode, targetNode: CanvasNode): HTMLElement {
+    const connectionElement = document.createElement('div');
+    connectionElement.id = `connection-${connection.id}`;
+    connectionElement.className = 'canvas-connection';
+    
+    // Calculate connection path
+    const path = this.calculateConnectionPath(
+      sourceNode.position,
+      targetNode.position,
+      connection
+    );
+    
+    connectionElement.innerHTML = `
+      <svg class="connection-svg" style="
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 1;
+      ">
+        <defs>
+          <marker id="arrowhead-${connection.id}" markerWidth="10" markerHeight="7" 
+                  refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#6b7280" />
+          </marker>
+        </defs>
+        <path d="${path}" 
+              stroke="#6b7280" 
+              stroke-width="2" 
+              fill="none"
+              marker-end="url(#arrowhead-${connection.id})"
+              class="connection-path ${connection.animated ? 'animated' : ''}" />
+      </svg>
+      
+      <!-- Connection Controls -->
+      <div class="connection-controls" style="
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        display: none;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        padding: 4px;
+      ">
+        <button class="delete-connection" data-connection-id="${connection.id}" style="
+          background: #ef4444;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          padding: 4px 8px;
+          font-size: 12px;
+          cursor: pointer;
+        ">Delete</button>
+      </div>
+    `;
+    
+    // Show controls on hover
+    connectionElement.addEventListener('mouseenter', () => {
+      const controls = connectionElement.querySelector('.connection-controls') as HTMLElement;
+      controls.style.display = 'block';
+    });
+    
+    connectionElement.addEventListener('mouseleave', () => {
+      const controls = connectionElement.querySelector('.connection-controls') as HTMLElement;
+      controls.style.display = 'none';
+    });
+    
+    return connectionElement;
+  }
+
+  private applyNodeStyles(element: HTMLElement, theme: NodeTheme, node: CanvasNode): void {
+    element.style.cssText = `
+      position: absolute;
+      left: ${node.position.x}px;
+      top: ${node.position.y}px;
+      width: 240px;
+      min-height: 140px;
+      background: ${theme.backgroundColor};
+      border: 2px solid ${theme.borderColor};
+      border-radius: 12px;
+      box-shadow: 0 4px 6px -1px ${theme.shadowColor}, 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      cursor: move;
+      user-select: none;
+      transition: all 0.2s ease;
+      z-index: 10;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+    
+    // Add hover effects
+    element.addEventListener('mouseenter', () => {
+      element.style.transform = 'translateY(-2px)';
+      element.style.boxShadow = `0 8px 16px -4px ${theme.shadowColor}, 0 4px 8px -2px rgba(0, 0, 0, 0.1)`;
+    });
+    
+    element.addEventListener('mouseleave', () => {
+      if (!element.classList.contains('selected') && !element.classList.contains('dragging')) {
+        element.style.transform = 'translateY(0)';
+        element.style.boxShadow = `0 4px 6px -1px ${theme.shadowColor}, 0 2px 4px -1px rgba(0, 0, 0, 0.06)`;
+      }
+    });
+  }
+
+  private generateNodeHTML(node: CanvasNode, theme: NodeTheme): string {
+    const nodeIcon = this.getNodeIcon(node.type);
+    const nodeLabel = this.getNodeLabel(node.type);
+    const configPreview = this.formatConfigPreview(node.data.configuration);
+    
+    return `
+      <!-- Node Header -->
+      <div class="node-header" style="
+        padding: 16px 20px 12px 20px;
+        background: ${theme.headerColor};
+        color: ${theme.iconColor};
+        border-radius: 10px 10px 0 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-weight: 600;
+        font-size: 16px;
+      ">
+        <div class="node-title" style="display: flex; align-items: center;">
+          <span class="node-icon" style="font-size: 20px; margin-right: 8px;">
+            ${nodeIcon}
+          </span>
+          <span class="node-label">${nodeLabel}</span>
+        </div>
+        
+        <!-- Node Menu Button -->
+        <div class="node-menu" style="
+          width: 24px;
+          height: 24px;
+          border-radius: 4px;
+          background: rgba(255,255,255,0.2);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          font-size: 14px;
+        ">⚙️</div>
+      </div>
+      
+      <!-- Node Content -->
+      <div class="node-content" style="
+        padding: 16px 20px;
+        color: ${theme.textColor};
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      ">
+        <!-- Configuration Preview -->
+        <div class="node-config-preview" style="
+          font-size: 13px;
+          color: #6b7280;
+          line-height: 1.4;
+          background: #f9fafb;
+          padding: 10px 12px;
+          border-radius: 6px;
+          border: 1px solid #f3f4f6;
+        ">
+          ${configPreview}
+        </div>
+        
+        <!-- Execution Status -->
+        <div class="execution-status-display" style="
+          font-size: 12px;
+          padding: 6px 8px;
+          border-radius: 4px;
+          background: #f3f4f6;
+          color: #6b7280;
+          display: none;
+        ">
+          <span class="status-text">Ready</span>
+        </div>
+        
+        <!-- Streaming Content Preview -->
+        <div class="streaming-content" style="
+          max-height: 80px;
+          overflow-y: auto;
+          font-size: 12px;
+          background: #fafafa;
+          padding: 8px;
+          border-radius: 4px;
+          border-left: 3px solid ${theme.borderColor};
+          display: none;
+          font-family: 'Monaco', 'Menlo', monospace;
+          line-height: 1.3;
+        "></div>
+      </div>
+      
+      <!-- Connection Handles -->
+      <div class="connection-handles">
+        <!-- Input Handle -->
+        <div class="node-handle input" 
+             data-handle-type="input"
+             style="
+               position: absolute;
+               left: -10px;
+               top: 50%;
+               width: 20px;
+               height: 20px;
+               background: ${theme.borderColor};
+               border: 3px solid white;
+               border-radius: 50%;
+               transform: translateY(-50%);
+               cursor: crosshair;
+               transition: all 0.2s ease;
+               z-index: 20;
+             ">
+        </div>
+        
+        <!-- Output Handle -->
+        <div class="node-handle output"
+             data-handle-type="output"
+             style="
+               position: absolute;
+               right: -10px;
+               top: 50%;
+               width: 20px;
+               height: 20px;
+               background: ${theme.borderColor};
+               border: 3px solid white;
+               border-radius: 50%;
+               transform: translateY(-50%);
+               cursor: crosshair;
+               transition: all 0.2s ease;
+               z-index: 20;
+             ">
+        </div>
+      </div>
+      
+      <!-- Execution Indicator -->
+      <div class="execution-indicator" style="
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #d1d5db;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 8px;
+        color: white;
+        z-index: 15;
+      ">●</div>
+      
+      <!-- Progress Bar -->
+      <div class="execution-progress" style="
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: rgba(0,0,0,0.1);
+        border-radius: 0 0 10px 10px;
+        overflow: hidden;
+        display: none;
+      ">
+        <div class="progress-fill" style="
+          height: 100%;
+          background: ${theme.borderColor};
+          width: 0%;
+          transition: width 0.3s ease;
+        "></div>
+      </div>
+    `;
+  }
+
+  private setupNodeInteractions(element: HTMLElement, node: CanvasNode): void {
+    // Handle selection
+    element.addEventListener('mousedown', (e) => {
+      if (e.target === element || (e.target as HTMLElement).closest('.node-content')) {
+        element.classList.add('selected');
+        this.bringNodeToFront(element);
+      }
+    });
+    
+    // Handle double-click for configuration
+    element.addEventListener('dblclick', () => {
+      this.openNodeConfiguration(node);
+    });
+    
+    // Handle menu click
+    const menuButton = element.querySelector('.node-menu');
+    menuButton?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.showNodeContextMenu(node, e as MouseEvent);
+    });
+    
+    // Handle connection handles
+    const handles = element.querySelectorAll('.node-handle');
+    handles.forEach(handle => {
+      this.setupHandleInteractions(handle as HTMLElement, node);
+    });
+    
+    // Handle drag operations
+    this.setupDragInteractions(element, node);
+  }
+
+  private setupHandleInteractions(handle: HTMLElement, node: CanvasNode): void {
+    handle.addEventListener('mouseenter', () => {
+      handle.style.transform = 'translateY(-50%) scale(1.2)';
+      handle.style.boxShadow = '0 0 0 4px rgba(59, 130, 246, 0.3)';
+    });
+    
+    handle.addEventListener('mouseleave', () => {
+      handle.style.transform = 'translateY(-50%) scale(1)';
+      handle.style.boxShadow = 'none';
+    });
+    
+    handle.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+      const handleType = handle.dataset.handleType as 'input' | 'output';
+      this.startConnectionDrag(node, handleType, e as MouseEvent);
+    });
+  }
+
+  private setupDragInteractions(element: HTMLElement, node: CanvasNode): void {
+    let isDragging = false;
+    let startPos = { x: 0, y: 0 };
+    let nodeStartPos = { x: node.position.x, y: node.position.y };
+    
+    element.addEventListener('mousedown', (e) => {
+      if ((e.target as HTMLElement).classList.contains('node-handle')) return;
+      
+      isDragging = true;
+      startPos = { x: e.clientX, y: e.clientY };
+      nodeStartPos = { x: node.position.x, y: node.position.y };
+      
+      element.classList.add('dragging');
+      element.style.zIndex = '1000';
+      document.body.style.cursor = 'grabbing';
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      
+      const deltaX = e.clientX - startPos.x;
+      const deltaY = e.clientY - startPos.y;
+      
+      node.position.x = nodeStartPos.x + deltaX;
+      node.position.y = nodeStartPos.y + deltaY;
+      
+      element.style.left = `${node.position.x}px`;
+      element.style.top = `${node.position.y}px`;
+      
+      // Update any connections
+      this.updateNodeConnections(node.id);
+    });
+    
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        element.classList.remove('dragging');
+        element.style.zIndex = '10';
+        document.body.style.cursor = 'default';
+      }
+    });
+  }
+
+  private updateExecutionVisuals(element: HTMLElement, state: NodeExecutionState): void {
+    // Update node border and shadow based on execution state
+    const borderColors = {
+      idle: '#e5e7eb',
+      executing: '#f59e0b',
+      completed: '#10b981',
+      error: '#ef4444',
+      streaming: '#3b82f6'
+    };
+    
+    element.style.borderColor = borderColors[state.status];
+    
+    if (state.status === 'executing' || state.status === 'streaming') {
+      element.classList.add('node-executing');
+    } else {
+      element.classList.remove('node-executing');
+    }
+    
+    // Update status display
+    const statusDisplay = element.querySelector('.execution-status-display') as HTMLElement;
+    const statusText = element.querySelector('.status-text') as HTMLElement;
+    
+    if (statusDisplay && statusText) {
+      statusDisplay.style.display = state.status === 'idle' ? 'none' : 'block';
+      statusText.textContent = this.getStatusText(state);
+      
+      // Color code status
+      const statusColors = {
+        idle: '#6b7280',
+        executing: '#f59e0b',
+        completed: '#10b981', 
+        error: '#ef4444',
+        streaming: '#3b82f6'
+      };
+      
+      statusDisplay.style.background = `${statusColors[state.status]}20`;
+      statusDisplay.style.color = statusColors[state.status];
+    }
+    
+    // Update progress bar
+    if (state.progress !== undefined) {
+      const progressBar = element.querySelector('.execution-progress') as HTMLElement;
+      const progressFill = element.querySelector('.progress-fill') as HTMLElement;
+      
+      if (progressBar && progressFill) {
+        progressBar.style.display = 'block';
+        progressFill.style.width = `${state.progress}%`;
+      }
+    }
+  }
+
+  private updateExecutionIndicator(element: HTMLElement, state: NodeExecutionState): void {
+    const indicator = element.querySelector('.execution-indicator') as HTMLElement;
+    
+    if (indicator) {
+      const indicatorStates = {
+        idle: { bg: '#d1d5db', text: '●', animation: '' },
+        executing: { bg: '#f59e0b', text: '⟳', animation: 'spin 2s linear infinite' },
+        streaming: { bg: '#3b82f6', text: '◐', animation: 'pulse 1.5s ease-in-out infinite' },
+        completed: { bg: '#10b981', text: '✓', animation: '' },
+        error: { bg: '#ef4444', text: '✗', animation: 'shake 0.5s ease-in-out' }
+      };
+      
+      const config = indicatorStates[state.status];
+      indicator.style.background = config.bg;
+      indicator.textContent = config.text;
+      indicator.style.animation = config.animation;
+    }
+  }
+
+  private updateStreamingContent(element: HTMLElement, content: string): void {
+    const streamingDiv = element.querySelector('.streaming-content') as HTMLElement;
+    
+    if (streamingDiv) {
+      streamingDiv.style.display = 'block';
+      streamingDiv.textContent = content.slice(-200) + (content.length > 200 ? '...' : '');
+      streamingDiv.scrollTop = streamingDiv.scrollHeight;
+    }
+  }
+
+  private calculateConnectionPath(
+    sourcePos: { x: number; y: number },
+    targetPos: { x: number; y: number },
+    connection: CanvasConnection
+  ): string {
+    // Calculate source and target points (handle positions)
+    const sourceX = sourcePos.x + 240; // Node width + handle offset
+    const sourceY = sourcePos.y + 70;  // Node center
+    const targetX = targetPos.x;
+    const targetY = targetPos.y + 70;
+    
+    // Create curved path
+    const deltaX = targetX - sourceX;
+    const deltaY = targetY - sourceY;
+    const controlOffset = Math.abs(deltaX) * 0.5;
+    
+    const controlX1 = sourceX + controlOffset;
+    const controlY1 = sourceY;
+    const controlX2 = targetX - controlOffset;
+    const controlY2 = targetY;
+    
+    return `M ${sourceX} ${sourceY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${targetX} ${targetY}`;
+  }
+
+  private injectNodeStyles(): void {
+    const style = document.createElement('style');
+    style.textContent = `
+      /* Node animations */
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+      }
+      
+      @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-2px); }
+        75% { transform: translateX(2px); }
+      }
+      
+      /* Node states */
+      .canvas-node.selected {
+        border-color: #3b82f6 !important;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3) !important;
+        transform: translateY(-2px);
+      }
+      
+      .canvas-node.dragging {
+        opacity: 0.8;
+        transform: rotate(2deg);
+      }
+      
+      .canvas-node.node-executing {
+        animation: pulse 2s ease-in-out infinite;
+      }
+      
+      /* Connection animations */
+      .connection-path.animated {
+        stroke-dasharray: 8, 4;
+        animation: dash 2s linear infinite;
+      }
+      
+      @keyframes dash {
+        to { stroke-dashoffset: -12; }
+      }
+      
+      /* Handle hover effects */
+      .node-handle:hover {
+        transform: translateY(-50%) scale(1.3) !important;
+        box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.4) !important;
+      }
+      
+      /* Scrollbar styling for streaming content */
+      .streaming-content::-webkit-scrollbar {
+        width: 4px;
+      }
+      
+      .streaming-content::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 2px;
+      }
+      
+      .streaming-content::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 2px;
+      }
+      
+      .streaming-content::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+      }
+    `;
+    
+    document.head.appendChild(style);
+  }
+
+  // Helper methods
+  private getNodeIcon(type: CanvasNode['type']): string {
+    const icons = {
+      'BrainNode': '🧠',
+      'InputNode': '📥',
+      'OutputNode': '📤',
+      'KnowledgeBaseNode': '📚'
+    };
+    return icons[type];
+  }
+
+  private getNodeLabel(type: CanvasNode['type']): string {
+    const labels = {
+      'BrainNode': 'Brain Node',
+      'InputNode': 'Input Node',
+      'OutputNode': 'Output Node',
+      'KnowledgeBaseNode': 'Knowledge Base'
+    };
+    return labels[type];
+  }
+
+  private formatConfigPreview(config: Record<string, any>): string {
+    const entries = Object.entries(config);
+    if (entries.length === 0) return '<em>No configuration</em>';
+    
+    const preview = entries.slice(0, 3).map(([key, value]) => {
+      let displayValue = value;
+      if (typeof value === 'string' && value.length > 20) {
+        displayValue = value.substring(0, 20) + '...';
+      }
+      return `<strong>${key}:</strong> ${displayValue}`;
+    });
+    
+    if (entries.length > 3) {
+      preview.push(`<em>+${entries.length - 3} more...</em>`);
+    }
+    
+    return preview.join('<br>');
+  }
+
+  private getStatusText(state: NodeExecutionState): string {
+    const statusTexts = {
+      idle: 'Ready',
+      executing: state.currentStep || 'Processing...',
+      streaming: 'Streaming response...',
+      completed: 'Completed successfully',
+      error: state.error || 'Error occurred'
+    };
+    
+    return statusTexts[state.status];
+  }
+
+  private bringNodeToFront(element: HTMLElement): void {
+    const allNodes = document.querySelectorAll('.canvas-node');
+    allNodes.forEach(node => {
+      (node as HTMLElement).style.zIndex = '10';
+    });
+    element.style.zIndex = '100';
+  }
+
+  private showNodeContextMenu(node: CanvasNode, event: MouseEvent): void {
+    // Create context menu
+    const menu = document.createElement('div');
+    menu.className = 'node-context-menu';
+    menu.style.cssText = `
+      position: fixed;
+      left: ${event.clientX}px;
+      top: ${event.clientY}px;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      z-index: 10000;
+      padding: 4px 0;
+      min-width: 150px;
+    `;
+    
+    menu.innerHTML = `
+      <div class="menu-item" data-action="configure" style="
+        padding: 8px 16px;
+        cursor: pointer;
+        font-size: 14px;
+        border-bottom: 1px solid #f3f4f6;
+      ">⚙️ Configure</div>
+      <div class="menu-item" data-action="duplicate" style="
+        padding: 8px 16px;
+        cursor: pointer;
+        font-size: 14px;
+        border-bottom: 1px solid #f3f4f6;
+      ">📋 Duplicate</div>
+      <div class="menu-item" data-action="delete" style="
+        padding: 8px 16px;
+        cursor: pointer;
+        font-size: 14px;
+        color: #ef4444;
+      ">🗑️ Delete</div>
+    `;
+    
+    // Add hover effects
+    menu.querySelectorAll('.menu-item').forEach(item => {
+      item.addEventListener('mouseenter', () => {
+        (item as HTMLElement).style.backgroundColor = '#f3f4f6';
+      });
+      item.addEventListener('mouseleave', () => {
+        (item as HTMLElement).style.backgroundColor = 'transparent';
+      });
+    });
+    
+    // Handle menu actions
+    menu.addEventListener('click', (e) => {
+      const action = (e.target as HTMLElement).dataset.action;
+      this.handleNodeContextAction(action!, node);
+      document.body.removeChild(menu);
+    });
+    
+    // Remove menu on outside click
+    setTimeout(() => {
+      document.addEventListener('click', () => {
+        if (document.body.contains(menu)) {
+          document.body.removeChild(menu);
+        }
+      }, { once: true });
+    }, 0);
+    
+    document.body.appendChild(menu);
+  }
+
+  // Event handlers and public methods
+  private startConnectionDrag(node: CanvasNode, handleType: 'input' | 'output', event: MouseEvent): void {
+    // This would integrate with the Canvas connection system
+    console.log(`Starting connection from ${node.id} (${handleType}) at`, event.clientX, event.clientY);
+  }
+
+  private updateNodeConnections(nodeId: string): void {
+    // Update all connections involving this node
+    const connections = document.querySelectorAll(`[data-source="${nodeId}"], [data-target="${nodeId}"]`);
+    connections.forEach(connection => {
+      // Recalculate and update connection path
+      // This would integrate with the Canvas connection system
+    });
+  }
+
+  private openNodeConfiguration(node: CanvasNode): void {
+    // This would trigger the Components Panel to open configuration
+    window.dispatchEvent(new CustomEvent('openNodeConfig', { detail: node }));
+  }
+
+  private handleNodeContextAction(action: string, node: CanvasNode): void {
+    switch (action) {
+      case 'configure':
+        this.openNodeConfiguration(node);
+        break;
+      case 'duplicate':
+        window.dispatchEvent(new CustomEvent('duplicateNode', { detail: node }));
+        break;
+      case 'delete':
+        window.dispatchEvent(new CustomEvent('deleteNode', { detail: node }));
+        break;
+    }
+  }
+
+  // Public API methods
+  public getExecutionState(nodeId: string): NodeExecutionState | undefined {
+    return this.executionStates.get(nodeId);
+  }
+
+  public clearExecutionState(nodeId: string): void {
+    this.executionStates.delete(nodeId);
+    const element = document.getElementById(`node-${nodeId}`);
+    if (element) {
+      this.updateExecutionVisuals(element, { status: 'idle' });
+    }
+  }
+
+  public highlightNode(nodeId: string, highlight: boolean = true): void {
+    const element = document.getElementById(`node-${nodeId}`);
+    if (element) {
+      if (highlight) {
+        element.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.5)';
+        element.style.transform = 'translateY(-4px)';
+      } else {
+        element.style.boxShadow = '';
+        element.style.transform = '';
+      }
+    }
+  }
+
+  public updateNodePosition(nodeId: string, position: { x: number; y: number }): void {
+    const element = document.getElementById(`node-${nodeId}`);
+    if (element) {
+      element.style.left = `${position.x}px`;
+      element.style.top = `${position.y}px`;
+      this.updateNodeConnections(nodeId);
+    }
+  }
+}
