@@ -7,10 +7,14 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "cd Frontend && python3 -m http.server 3001",
-    "backend": "source venv/bin/activate && cd Backend && python3 -m uvicorn main:app --reload --port 8000"
+    "backend": "cd Backend && source ../backend_venv/bin/activate && uvicorn main:app --reload --port 8003",
+    "frontend": "cd Frontend && npm run dev",
+    "dev-all": "npx concurrently \"npm run backend\" \"npm run frontend\"",
+    "install-deps": "cd Frontend && npm install"
   },
   "devDependencies": {
-    "typescript": "^5.5.2"
+    "typescript": "^5.5.2",
+    "concurrently": "^8.2.2"
   },
   "type": "module"
 }

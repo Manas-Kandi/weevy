@@ -75,3 +75,5 @@ pids
 # Temporary files
 *.tmp
 *.temp
+
+!Frontend/src/lib/
