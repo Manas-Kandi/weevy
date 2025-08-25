@@ -17,18 +17,21 @@
  let scale = 1;
  let offsetX = 0;
  let offsetY = 0;
- let isDragging = false;
+ let isDraggingCanvas = false;
+ let isDraggingNode = false;
  let dragStartX = 0;
  let dragStartY = 0;
  let canvasStartX = 0;
  let canvasStartY = 0;
+
+ let draggedNodeId: string | null = null;
+ let initialNodePosition: { x: number; y: number } = { x: 0, y: 0 };
 
  // Connection state
  let isConnecting = false;
  let connectionStart: string | null = null;
 
  onMount(() => {
-  // Center the canvas so (2500, 2500) is in the middle of the viewport
   const containerRect = canvasElement.parentElement?.getBoundingClientRect();
   if (containerRect) {
    offsetX = containerRect.width / 2 - 2500 * scale;
@@ -44,8 +47,9 @@
  }
 
  function handleMouseDown(e: MouseEvent) {
-  if (e.target === canvasElement || (e.target as Element)?.id === 'canvas-container') {
-   isDragging = true;
+  console.log("handleMouseDown", e.target);
+  if (e.target === canvasElement) {
+   isDraggingCanvas = true;
    dragStartX = e.clientX;
    dragStartY = e.clientY;
    canvasStartX = offsetX;
@@ -54,17 +58,28 @@
  }
 
  function handleMouseMove(e: MouseEvent) {
-  if (isDragging) {
+  if (isDraggingNode && draggedNodeId) {
+   const node = nodes.get(draggedNodeId);
+   if (node) {
+    const dx = (e.clientX - dragStartX) / scale;
+    const dy = (e.clientY - dragStartY) / scale;
+    node.position.x = initialNodePosition.x + dx;
+    node.position.y = initialNodePosition.y + dy;
+    nodes = new Map(nodes);
+   }
+  } else if (isDraggingCanvas) {
    const deltaX = e.clientX - dragStartX;
    const deltaY = e.clientY - dragStartY;
    offsetX = canvasStartX + deltaX;
    offsetY = canvasStartY + deltaY;
    updateCanvasTransform();
-  }
+  } 
  }
 
  function handleMouseUp() {
-  isDragging = false;
+  isDraggingCanvas = false;
+  isDraggingNode = false;
+  draggedNodeId = null;
  }
 
  function handleDoubleClick(e: MouseEvent) {
@@ -101,7 +116,6 @@
  }
 
  function handleKeyDown(e: KeyboardEvent) {
-  // Keyboard support for panning and zooming
   const panStep = 40;
   if (e.key === 'ArrowLeft') { offsetX += panStep; updateCanvasTransform(); e.preventDefault(); }
   else if (e.key === 'ArrowRight') { offsetX -= panStep; updateCanvasTransform(); e.preventDefault(); }
@@ -127,11 +141,6 @@
   updateCanvasTransform();
  }
 
- function handleNodeSelect(nodeId: string) {
-  selectedNodeId = nodeId;
-  dispatch('nodeSelect', { nodeId });
- }
-
  function handleConnectionStart(nodeId: string) {
   isConnecting = true;
   connectionStart = nodeId;
@@ -147,12 +156,17 @@
   connectionStart = null;
  }
 
- function handleNodeMove(event: CustomEvent<{ nodeId: string; position: { x: number; y: number } }>) {
-  const { nodeId, position } = event.detail;
+ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEvent }>) {
+  const { nodeId, event: mouseEvent } = event.detail;
+  console.log("handleNodeStartDrag", nodeId);
+  isDraggingNode = true;
+  draggedNodeId = nodeId;
   const node = nodes.get(nodeId);
   if (node) {
-   node.position = position;
-   nodes = new Map(nodes);
+   dragStartX = mouseEvent.clientX;
+   dragStartY = mouseEvent.clientY;
+   initialNodePosition.x = node.position.x;
+   initialNodePosition.y = node.position.y;
   }
  }
 
@@ -182,7 +196,6 @@
   on:mouseleave={handleMouseUp}
   on:wheel={handleWheel}
   on:dblclick={handleDoubleClick}
-  on:dragover={(e) => e.preventDefault()}
  >
   <!-- Render connections as SVG -->
   <svg class="connections-layer">
@@ -215,10 +228,9 @@
    <WorkflowNode
     {node}
     selected={selectedNodeId === node.id}
-    on:select={() => handleNodeSelect(node.id)}
     on:connectionStart={() => handleConnectionStart(node.id)}
     on:connectionEnd={() => handleConnectionEnd(node.id)}
-    on:nodeMove={handleNodeMove}
+    on:nodestartdrag={handleNodeStartDrag}
    />
   {/each}
  </div>

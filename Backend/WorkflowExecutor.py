@@ -1,6 +1,7 @@
 
 import asyncio
 from typing import Any, Dict, List
+from datetime import datetime
 
 from BrainNode import BrainNode
 from InputNode import InputNode
@@ -8,11 +9,18 @@ from OutputNode import OutputNode
 from KnowledgeBaseNode import KnowledgeBaseNode
 from GeneralNodeLogic import NodeInputs, WorkflowMemory, PreviousNodeOutput
 
+# Support both canonical short types and class-like names
 NODE_CLASSES = {
+    # canonical
     "brain": BrainNode,
     "input": InputNode,
     "output": OutputNode,
     "knowledge": KnowledgeBaseNode,
+    # class-style
+    "BrainNode": BrainNode,
+    "InputNode": InputNode,
+    "OutputNode": OutputNode,
+    "KnowledgeBaseNode": KnowledgeBaseNode,
 }
 
 class WorkflowExecutor:
@@ -60,10 +68,22 @@ class WorkflowExecutor:
                     workflow_memory=self.workflow_memory,
                 )
 
-                result = await node_instance.execute(inputs.user_configuration, inputs.previous_node_data, inputs.workflow_memory)
-                self.node_results[node_id] = result
+                result = await node_instance.execute(
+                    inputs.user_configuration,
+                    inputs.previous_node_data,
+                    inputs.workflow_memory,
+                )
 
-                await self.manager.broadcast(json.dumps({"type": "node_executed", "node_id": node_id, "result": str(result.data), "message": "Node executed successfully"}))
+                # Convert NodeOutput -> PreviousNodeOutput for downstream nodes
+                prev_out = self._to_previous_output(node_id, node_type, result)
+                self.node_results[node_id] = prev_out
+
+                await self.manager.broadcast(json.dumps({
+                    "type": "node_executed",
+                    "node_id": node_id,
+                    "result": str(prev_out.data),
+                    "message": "Node executed successfully"
+                }))
 
                 for neighbor_id in adj.get(node_id, []):
                     in_degree[neighbor_id] -= 1
@@ -87,3 +107,33 @@ class WorkflowExecutor:
 
         return input_data
 
+    def _to_previous_output(self, node_id: str, node_type: str, result: PreviousNodeOutput | Any) -> PreviousNodeOutput:
+        """Normalize any node result to PreviousNodeOutput expected downstream.
+
+        If `result` is already a PreviousNodeOutput, return it. Otherwise, assume it
+        is a NodeOutput-like object and map fields with safe defaults.
+        """
+        if isinstance(result, PreviousNodeOutput):
+            return result
+
+        # Best-effort extraction from NodeOutput
+        data = getattr(result, 'data', result)
+        timestamp = getattr(result, 'timestamp', None) or datetime.now().timestamp()
+
+        # Infer success from metadata if present
+        metadata = getattr(result, 'metadata', {}) or {}
+        error_flag = bool(metadata.get('error'))
+        success = not error_flag
+        error_message = metadata.get('error_message') if error_flag else None
+        exec_ms = metadata.get('execution_time_ms')
+
+        return PreviousNodeOutput(
+            node_id=node_id,
+            node_type=node_type,
+            data=data,
+            timestamp=timestamp,
+            connection_type="direct",
+            success=success,
+            error_message=error_message,
+            execution_time_ms=exec_ms,
+        )

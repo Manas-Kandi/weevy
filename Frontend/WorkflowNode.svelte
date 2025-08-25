@@ -10,7 +10,7 @@
 		select: void;
 		connectionStart: void;
 		connectionEnd: void;
-		nodeMove: { nodeId: string; position: { x: number; y: number } };
+		nodestartdrag: { nodeId: string; event: MouseEvent };
 	}>();
 
 	const nodeIcons = {
@@ -27,14 +27,6 @@
 		knowledge: '#F59E0B'
 	};
 
-	let initialX = 0;
-	let initialY = 0;
-
-	function handleClick(e: MouseEvent) {
-		e.stopPropagation();
-		dispatch('select');
-	}
-
 	function handleOutputPortClick(e: MouseEvent) {
 		e.stopPropagation();
 		dispatch('connectionStart');
@@ -44,32 +36,16 @@
 		e.stopPropagation();
 		dispatch('connectionEnd');
 	}
-
-	function handleDragStart(e: DragEvent) {
-		if (e.dataTransfer) {
-			e.dataTransfer.setData('text/plain', node.id);
-			initialX = e.clientX - node.position.x;
-			initialY = e.clientY - node.position.y;
-		}
-	}
-
-	function handleDragEnd(e: DragEvent) {
-		const newPosition = {
-			x: e.clientX - initialX,
-			y: e.clientY - initialY
-		};
-		dispatch('nodeMove', { nodeId: node.id, position: newPosition });
-	}
 </script>
 
 <div 
 	class="workflow-node"
 	class:selected
 	style="left: {node.position.x}px; top: {node.position.y}px; border-color: {nodeColors[node.type]}"
-	on:click={handleClick}
-	draggable="true"
-	on:dragstart={handleDragStart}
-	on:dragend={handleDragEnd}
+	on:mousedown={(event) => {
+		event.stopPropagation();
+		dispatch('nodestartdrag', { nodeId: node.id, event });
+	}}
 	role="group"
 	aria-label={`Workflow node ${node.data.label}`}
 >
