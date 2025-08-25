@@ -1,0 +1,12 @@
+{
+  "name": "weev",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI Agent Workflow Builder",
+  "scripts": {
+    "dev": "bash config/scripts/dev.sh",
+    "backend": "cd config && python -m uvicorn ../backend/main:app --reload --port 8004",
+    "frontend": "cd config && npm run dev",
+    "install": "cd config && npm install && (python3 -m pip install -r requirements.txt || python -m pip install -r requirements.txt)"
+  }
+}
