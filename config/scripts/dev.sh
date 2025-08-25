@@ -6,8 +6,8 @@ echo "Starting Weev development servers..."
 echo "Backend: http://localhost:8004"
 echo "Frontend: http://localhost:3000"
 
-# Start backend in background
-cd config && python -m uvicorn ../backend/main:app --reload --port 8004 &
+# Start backend in background (we are currently in config/)
+python -m uvicorn ../backend/main:app --reload --port 8004 &
 BACKEND_PID=$!
 
 # Start frontend dev server from config (SvelteKit project lives here)

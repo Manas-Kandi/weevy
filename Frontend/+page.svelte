@@ -1,9 +1,9 @@
 <script lang="ts">
  import { onMount } from 'svelte';
- import Canvas from '$lib/components/Canvas.svelte';
- import ComponentsPanel from '$lib/components/ComponentsPanel.svelte';
- import { websocketService } from '$lib/websocket.js';
- import type { Node, Connection, ExecutionUpdate } from '$lib/types.js';
+ import Canvas from './Canvas.svelte';
+ import ComponentsPanel from './ComponentsPanel.svelte';
+ import { websocketService } from './websocket';
+ import type { Node, Connection, ExecutionUpdate } from './types';
 
  let nodes: Map<string, Node> = new Map();
  let connections: Map<string, Connection> = new Map();
@@ -35,7 +35,10 @@
   const newNode: Node = {
    id: nodeId,
    type: event.detail.type as any,
-   position: { x: 300, y: 300 }, // Default position
+   position: { 
+    x: 2400 + Math.random() * 100, // Center-ish with slight randomness
+    y: 2400 + Math.random() * 100 
+   },
    data: {
     label: nodeTypes[event.detail.type as keyof typeof nodeTypes],
     configuration: {}

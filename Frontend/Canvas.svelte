@@ -1,6 +1,6 @@
 <script lang="ts">
  import { onMount, createEventDispatcher } from 'svelte';
- import type { Node, Connection } from '../types.js';
+ import type { Node, Connection } from './types';
  import WorkflowNode from './WorkflowNode.svelte';
 
  export let nodes: Map<string, Node> = new Map();

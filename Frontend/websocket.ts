@@ -1,4 +1,4 @@
-import type { WorkflowExecution, ExecutionUpdate } from './types.js';
+import type { WorkflowExecution, ExecutionUpdate } from './types';
 
 export class WebSocketService {
   private ws: WebSocket | null = null;
@@ -6,7 +6,9 @@ export class WebSocketService {
   private messageHandlers: Array<(data: ExecutionUpdate) => void> = [];
 
   connect() {
-    this.ws = new WebSocket('ws://localhost:8000/ws/canvas');
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const url = `${protocol}://${window.location.host}/ws`;
+    this.ws = new WebSocket(url);
     
     this.ws.onopen = () => {
       console.log('🔗 Connected to Weev backend');
