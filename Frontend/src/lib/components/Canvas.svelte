@@ -28,11 +28,11 @@
  let connectionStart: string | null = null;
 
  onMount(() => {
-  // Center the canvas so (2500, 2500) is in the middle of the viewport
+  // Center the canvas initially
   const containerRect = canvasElement.parentElement?.getBoundingClientRect();
   if (containerRect) {
-   offsetX = containerRect.width / 2 - 2500 * scale;
-   offsetY = containerRect.height / 2 - 2500 * scale;
+   offsetX = (containerRect.width - 5000) / 2;
+   offsetY = (containerRect.height - 5000) / 2;
   }
   updateCanvasTransform();
  });
@@ -121,8 +121,8 @@
   scale = 1;
   const containerRect = canvasElement.parentElement?.getBoundingClientRect();
   if (containerRect) {
-   offsetX = containerRect.width / 2 - 2500;
-   offsetY = containerRect.height / 2 - 2500;
+   offsetX = (containerRect.width - 5000) / 2;
+   offsetY = (containerRect.height - 5000) / 2;
   }
   updateCanvasTransform();
  }

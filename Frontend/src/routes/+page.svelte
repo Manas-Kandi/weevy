@@ -35,10 +35,7 @@
   const newNode: Node = {
    id: nodeId,
    type: event.detail.type as any,
-   position: { 
-    x: 2400 + Math.random() * 100, // Center-ish with slight randomness
-    y: 2400 + Math.random() * 100 
-   },
+   position: { x: 300, y: 300 }, // Default position
    data: {
     label: nodeTypes[event.detail.type as keyof typeof nodeTypes],
     configuration: {}
