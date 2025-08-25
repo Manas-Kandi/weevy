@@ -77,6 +77,8 @@ class NodeOutput:
     data: Any
     timestamp: float
     metadata: Dict[str, Any]
+    success: bool = True
+    error_message: Optional[str] = None
     
     # Enhanced outputs for workflow intelligence
     next_suggested_nodes: List[str] = field(default_factory=list)
@@ -392,6 +394,8 @@ Execute your node function now:
             node_type="error",
             data=f"Node execution failed: {error_message}",
             timestamp=datetime.now().timestamp(),
+            success=False,
+            error_message=error_message,
             confidence_score=0.0,
             metadata={
                 'execution_mode': self.execution_mode.value,

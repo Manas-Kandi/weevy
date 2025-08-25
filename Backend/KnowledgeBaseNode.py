@@ -32,8 +32,9 @@ class KnowledgeBaseNode(GeneralNodeLogic):
             node_id=self.node_id,
             node_type="KnowledgeBaseNode",
             data=previous_node_data,
-            timestamp=0,
-            metadata={"status": "success"}
+            timestamp=__import__('datetime').datetime.now().timestamp(),
+            metadata={"status": "success"},
+            success=True
         )
     
     async def _retrieve_knowledge(self, query: str, config: Dict[str, Any]) -> NodeOutput:

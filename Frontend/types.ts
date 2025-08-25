@@ -1,6 +1,6 @@
 export interface Node {
   id: string;
-  type: 'brain' | 'input' | 'output' | 'knowledge';
+  type: 'brain' | 'input' | 'output' | 'knowledge' | 'tool';
   position: { x: number; y: number };
   data: {
     label: string;

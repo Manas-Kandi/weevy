@@ -18,14 +18,16 @@
  let offsetX = 0;
  let offsetY = 0;
  let isDraggingCanvas = false;
- let isDraggingNode = false;
  let dragStartX = 0;
  let dragStartY = 0;
  let canvasStartX = 0;
  let canvasStartY = 0;
 
  let draggedNodeId: string | null = null;
+ let draggedNodeElement: HTMLDivElement | null = null;
  let initialNodePosition: { x: number; y: number } = { x: 0, y: 0 };
+ let initialMouseX = 0;
+ let initialMouseY = 0;
 
  // Connection state
  let isConnecting = false;
@@ -47,7 +49,6 @@
  }
 
  function handleMouseDown(e: MouseEvent) {
-  console.log("handleMouseDown", e.target);
   if (e.target === canvasElement) {
    isDraggingCanvas = true;
    dragStartX = e.clientX;
@@ -58,28 +59,38 @@
  }
 
  function handleMouseMove(e: MouseEvent) {
-  if (isDraggingNode && draggedNodeId) {
-   const node = nodes.get(draggedNodeId);
-   if (node) {
-    const dx = (e.clientX - dragStartX) / scale;
-    const dy = (e.clientY - dragStartY) / scale;
-    node.position.x = initialNodePosition.x + dx;
-    node.position.y = initialNodePosition.y + dy;
-    nodes = new Map(nodes);
-   }
-  } else if (isDraggingCanvas) {
+  if (isDraggingCanvas) {
    const deltaX = e.clientX - dragStartX;
    const deltaY = e.clientY - dragStartY;
    offsetX = canvasStartX + deltaX;
    offsetY = canvasStartY + deltaY;
    updateCanvasTransform();
-  } 
+  } else if (draggedNodeId && draggedNodeElement) {
+   const dx = e.clientX - initialMouseX;
+   const dy = e.clientY - initialMouseY;
+
+   const newX = initialNodePosition.x + dx / scale;
+   const newY = initialNodePosition.y + dy / scale;
+
+   draggedNodeElement.style.transform = `translate(${newX}px, ${newY}px)`;
+  }
  }
 
  function handleMouseUp() {
+  if (draggedNodeId && draggedNodeElement) {
+   const node = nodes.get(draggedNodeId);
+   if (node) {
+    const transform = getComputedStyle(draggedNodeElement).transform;
+    const matrix = new DOMMatrixReadOnly(transform);
+    node.position.x = matrix.m41;
+    node.position.y = matrix.m42;
+    nodes = nodes; // Trigger reactivity
+   }
+   draggedNodeElement.style.transform = ''; // Clear transform
+  }
   isDraggingCanvas = false;
-  isDraggingNode = false;
   draggedNodeId = null;
+  draggedNodeElement = null;
  }
 
  function handleDoubleClick(e: MouseEvent) {
@@ -156,17 +167,16 @@
   connectionStart = null;
  }
 
- function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEvent }>) {
-  const { nodeId, event: mouseEvent } = event.detail;
-  console.log("handleNodeStartDrag", nodeId);
-  isDraggingNode = true;
+ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEvent; element: HTMLDivElement }>) {
+  const { nodeId, event: mouseEvent, element } = event.detail;
   draggedNodeId = nodeId;
+  draggedNodeElement = element;
   const node = nodes.get(nodeId);
   if (node) {
-   dragStartX = mouseEvent.clientX;
-   dragStartY = mouseEvent.clientY;
    initialNodePosition.x = node.position.x;
    initialNodePosition.y = node.position.y;
+   initialMouseX = mouseEvent.clientX;
+   initialMouseY = mouseEvent.clientY;
   }
  }
 
@@ -264,7 +274,6 @@
   height: 5000px;
   background-color: #181818;
   transform-origin: 0 0;
-  transition: transform 0.2s ease-out;
  }
 
  .connections-layer {

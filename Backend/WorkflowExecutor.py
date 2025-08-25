@@ -7,6 +7,7 @@ from BrainNode import BrainNode
 from InputNode import InputNode
 from OutputNode import OutputNode
 from KnowledgeBaseNode import KnowledgeBaseNode
+from ToolNode import ToolNode
 from GeneralNodeLogic import NodeInputs, WorkflowMemory, PreviousNodeOutput
 
 # Support both canonical short types and class-like names
@@ -16,11 +17,13 @@ NODE_CLASSES = {
     "input": InputNode,
     "output": OutputNode,
     "knowledge": KnowledgeBaseNode,
+    "tool": ToolNode,
     # class-style
     "BrainNode": BrainNode,
     "InputNode": InputNode,
     "OutputNode": OutputNode,
     "KnowledgeBaseNode": KnowledgeBaseNode,
+    "ToolNode": ToolNode,
 }
 
 class WorkflowExecutor:
@@ -120,11 +123,19 @@ class WorkflowExecutor:
         data = getattr(result, 'data', result)
         timestamp = getattr(result, 'timestamp', None) or datetime.now().timestamp()
 
-        # Infer success from metadata if present
+        # Infer success from explicit flag or metadata if present
+        if hasattr(result, 'success'):
+            success = bool(getattr(result, 'success'))
+            error_message = getattr(result, 'error_message', None)
+        else:
+            success = True
+            error_message = None
+
         metadata = getattr(result, 'metadata', {}) or {}
         error_flag = bool(metadata.get('error'))
-        success = not error_flag
-        error_message = metadata.get('error_message') if error_flag else None
+        if error_flag:
+            success = False
+            error_message = error_message or metadata.get('error_message')
         exec_ms = metadata.get('execution_time_ms')
 
         return PreviousNodeOutput(

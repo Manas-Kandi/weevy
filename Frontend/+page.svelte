@@ -29,7 +29,8 @@
    brain: 'AI Brain',
    input: 'Input', 
    output: 'Output',
-   knowledge: 'Knowledge'
+   knowledge: 'Knowledge',
+   tool: 'Tool'
   };
   
   const newNode: Node = {

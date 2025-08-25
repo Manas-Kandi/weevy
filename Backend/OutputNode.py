@@ -32,8 +32,9 @@ class OutputNode(GeneralNodeLogic):
             node_id=self.node_id,
             node_type="OutputNode",
             data=previous_node_data,
-            timestamp=0,
-            metadata={"status": "success"}
+            timestamp=__import__('datetime').datetime.now().timestamp(),
+            metadata={"status": "success"},
+            success=True
         )
     
     def _collect_final_data(self, previous_data: List[PreviousNodeOutput]) -> Dict[str, Any]:

@@ -39,8 +39,9 @@ class InputNode(GeneralNodeLogic):
             node_id=self.node_id,
             node_type="InputNode",
             data=user_configuration,
-            timestamp=0,
-            metadata={"status": "success"}
+            timestamp=__import__('datetime').datetime.now().timestamp(),
+            metadata={"status": "success"},
+            success=True
         )
     
     def _process_input(self, text: str, input_type: str, metadata: Dict[str, Any]) -> Dict[str, Any]:

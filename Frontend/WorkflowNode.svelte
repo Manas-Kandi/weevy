@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
 	import type { Node } from './types';
-	import { Brain, FileInput, FileOutput, BookOpen } from 'lucide-svelte';
+	import { Brain, FileInput, FileOutput, BookOpen, Tool } from 'lucide-svelte';
 
 	export let node: Node;
 	export let selected: boolean = false;
@@ -17,14 +17,16 @@
 		brain: Brain,
 		input: FileInput,
 		output: FileOutput,
-		knowledge: BookOpen
+		knowledge: BookOpen,
+		tool: Tool
 	};
 
 	const nodeColors = {
 		brain: '#8B5CF6',
 		input: '#3B82F6', 
 		output: '#10B981',
-		knowledge: '#F59E0B'
+		knowledge: '#F59E0B',
+		tool: '#EF4444'
 	};
 
 	function handleOutputPortClick(e: MouseEvent) {
@@ -41,7 +43,7 @@
 <div 
 	class="workflow-node"
 	class:selected
-	style="left: {node.position.x}px; top: {node.position.y}px; border-color: {nodeColors[node.type]}"
+	style="transform: translate({node.position.x}px, {node.position.y}px); border-color: {nodeColors[node.type]}"
 	on:mousedown={(event) => {
 		event.stopPropagation();
 		dispatch('nodestartdrag', { nodeId: node.id, event });

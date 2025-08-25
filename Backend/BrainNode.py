@@ -47,8 +47,9 @@ class BrainNode(GeneralNodeLogic):
             node_id=self.node_id,
             node_type="BrainNode",
             data=previous_node_data,
-            timestamp=0,
-            metadata={"status": "success"}
+            timestamp=__import__('datetime').datetime.now().timestamp(),
+            metadata={"status": "success"},
+            success=True
         )
     
     def connect_node(self, node):
