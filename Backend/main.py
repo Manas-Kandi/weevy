@@ -16,6 +16,7 @@ from BrainNode import BrainNode
 from InputNode import InputNode
 from OutputNode import OutputNode
 from KnowledgeBaseNode import KnowledgeBaseNode
+from WorkflowExecutor import WorkflowExecutor
 
 # Load environment variables
 load_dotenv()
@@ -25,7 +26,14 @@ app = FastAPI(title="Weev Backend", version="1.0.0")
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:3002",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        "http://127.0.0.1:3002",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -125,93 +133,15 @@ async def handle_workflow_execution(workflow_data: Dict[str, Any], websocket: We
     """Handle workflow execution with streaming updates"""
     try:
         workflow_id = workflow_data.get("workflow_id", "unknown")
-        nodes = workflow_data.get("nodes", [])
-        connections = workflow_data.get("connections", [])
         
-        # Send execution started
         await manager.send_personal_message(json.dumps({
             "type": "execution_started",
             "workflow_id": workflow_id
         }), websocket)
-        
-        # Execute nodes in order
-        previous_outputs = []
-        
-        for i, node_data in enumerate(nodes):
-            node_id = node_data.get("node_id")
-            node_type = node_data.get("node_type")
-            
-            # Send node execution started
-            await manager.send_personal_message(json.dumps({
-                "type": "execution_update",
-                "node_id": node_id,
-                "content": f"Executing {node_type}..."
-            }), websocket)
-            
-            try:
-                # Create node instance
-                if node_type not in NODE_CLASSES:
-                    raise ValueError(f"Unknown node type: {node_type}")
-                
-                node_class = NODE_CLASSES[node_type]
-                node_instance = node_class(node_id, f"{node_type}_{node_id}")
-                
-                # Prepare inputs
-                user_config = node_data.get("user_configuration", {})
-                system_rules = node_data.get("system_rules", "")
-                
-                # Execute node
-                from GeneralNodeLogic import NodeInputs, WorkflowMemory
-                
-                workflow_memory = WorkflowMemory(workflow_id=workflow_id)
-                
-                inputs = NodeInputs(
-                    system_rules=system_rules,
-                    user_configuration=user_config,
-                    previous_node_data=previous_outputs,
-                    workflow_memory=workflow_memory
-                )
-                
-                # Execute with streaming
-                output = await node_instance.execute_node(inputs)
-                
-                # Send node result
-                await manager.send_personal_message(json.dumps({
-                    "type": "node_result",
-                    "node_id": node_id,
-                    "result": output.data,
-                    "metadata": output.metadata
-                }), websocket)
-                
-                previous_outputs.append({
-                    "node_id": node_id,
-                    "node_type": node_type,
-                    "data": output.data,
-                    "success": True
-                })
-                
-            except Exception as e:
-                await manager.send_personal_message(json.dumps({
-                    "type": "execution_error",
-                    "node_id": node_id,
-                    "error": str(e)
-                }), websocket)
-                
-                previous_outputs.append({
-                    "node_id": node_id,
-                    "node_type": node_type,
-                    "data": str(e),
-                    "success": False,
-                    "error_message": str(e)
-                })
-        
-        # Send execution completed
-        await manager.send_personal_message(json.dumps({
-            "type": "execution_complete",
-            "workflow_id": workflow_id,
-            "results": previous_outputs
-        }), websocket)
-        
+
+        executor = WorkflowExecutor(workflow_data, manager)
+        await executor.execute()
+
     except Exception as e:
         await manager.send_personal_message(json.dumps({
             "type": "execution_error",
@@ -227,4 +157,5 @@ async def handle_node_status(data: Dict[str, Any], websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port, reload=True)

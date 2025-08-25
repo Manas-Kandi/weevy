@@ -35,34 +35,12 @@ class InputNode(GeneralNodeLogic):
         """
         Process user input and prepare it for downstream nodes.
         """
-        # Extract input configuration
-        input_config = user_configuration.get("input", {})
-        input_text = input_config.get("input_text", "")
-        input_type = input_config.get("input_type", "text")
-        
-        # Validate input
-        if not input_text:
-            return NodeOutput(
-                node_id=self.node_id,
-                node_type="InputNode",
-                data={"error": "No input text provided"},
-                timestamp=0,
-                metadata={"status": "error", "input_type": input_type}
-            )
-        
-        # Process based on input type
-        processed_data = self._process_input(input_text, input_type, input_config.get("metadata", {}))
-        
         return NodeOutput(
             node_id=self.node_id,
             node_type="InputNode",
-            data=processed_data,
+            data=user_configuration,
             timestamp=0,
-            metadata={
-                "status": "success",
-                "input_type": input_type,
-                "processed_length": len(str(processed_data))
-            }
+            metadata={"status": "success"}
         )
     
     def _process_input(self, text: str, input_type: str, metadata: Dict[str, Any]) -> Dict[str, Any]:

@@ -28,23 +28,13 @@ class KnowledgeBaseNode(GeneralNodeLogic):
         """
         Retrieve or store knowledge based on user configuration.
         """
-        # Extract knowledge configuration
-        kb_config = user_configuration.get("knowledge_base", {})
-        action = kb_config.get("action", "retrieve")
-        query = kb_config.get("query", "")
-        
-        if action == "retrieve":
-            return await self._retrieve_knowledge(query, kb_config)
-        elif action == "store":
-            return await self._store_knowledge(kb_config)
-        else:
-            return NodeOutput(
-                node_id=self.node_id,
-                node_type="KnowledgeBaseNode",
-                data={"error": f"Unknown action: {action}"},
-                timestamp=0,
-                metadata={"status": "error", "action": action}
-            )
+        return NodeOutput(
+            node_id=self.node_id,
+            node_type="KnowledgeBaseNode",
+            data=previous_node_data,
+            timestamp=0,
+            metadata={"status": "success"}
+        )
     
     async def _retrieve_knowledge(self, query: str, config: Dict[str, Any]) -> NodeOutput:
         """Retrieve knowledge based on query"""

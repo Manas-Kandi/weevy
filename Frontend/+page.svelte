@@ -98,7 +98,7 @@
    workflow_id: `workflow_${Date.now()}`,
    nodes: Array.from(nodes.values()).map(node => ({
     node_id: node.id,
-    node_type: ({ brain: 'BrainNode', input: 'InputNode', output: 'OutputNode', knowledge: 'KnowledgeBaseNode' } as Record<string,string>)[node.type],
+    node_type: node.type,
     system_rules: `Execute ${node.type} node`,
     user_configuration: node.data.configuration
    })),
@@ -166,40 +166,40 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background-color: #1a1a1a;
+  background-color: #181818;
   color: #e0e0e0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
  }
 
  .header {
-  background-color: #2d2d2d;
+  background-color: #202020;
   padding: 16px;
-  border-bottom: 1px solid #404040;
+  border-bottom: 1px solid #303030;
   display: flex;
   justify-content: space-between;
   align-items: center;
  }
 
  .header h1 {
-  font-size: 24px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 500;
   margin: 0;
  }
 
  .execute-btn {
-  background-color: #10B981;
+  background-color: #3B82F6;
   color: white;
   border: none;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 600;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition: background-color 0.2s;
  }
 
  .execute-btn:hover {
-  background-color: #059669;
+  background-color: #2563EB;
  }
 
  .main {
@@ -212,27 +212,29 @@
   position: absolute;
   top: 20px;
   right: 20px;
-  width: 300px;
-  max-height: 400px;
-  background-color: #2d2d2d;
-  border: 1px solid #404040;
+  width: 350px;
+  max-height: 500px;
+  background-color: #202020;
+  border: 1px solid #303030;
   border-radius: 8px;
   padding: 16px;
   z-index: 10;
   overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
  }
 
  .results-panel h3 {
   margin: 0 0 12px 0;
   font-size: 16px;
+  font-weight: 500;
  }
 
  .result-item {
   margin-bottom: 12px;
-  padding: 8px;
-  background-color: #3d3d3d;
-  border-radius: 4px;
-  border-left: 3px solid #10B981;
+  padding: 12px;
+  background-color: #282828;
+  border-radius: 6px;
+  border-left: 3px solid #3B82F6;
  }
 
  .result-item.error {
@@ -240,9 +242,10 @@
  }
 
  .result-item strong {
-  color: #10B981;
+  color: #3B82F6;
   text-transform: uppercase;
   font-size: 12px;
+  font-weight: 600;
  }
 
  .result-item.error strong {
@@ -250,15 +253,15 @@
  }
 
  .result-item p {
-  margin: 4px 0;
+  margin: 8px 0;
   font-size: 14px;
  }
 
  .result-item pre {
-  background-color: #1a1a1a;
-  padding: 8px;
+  background-color: #181818;
+  padding: 12px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 13px;
   overflow-x: auto;
   margin: 8px 0;
  }

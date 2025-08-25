@@ -147,6 +147,15 @@
   connectionStart = null;
  }
 
+ function handleNodeMove(event: CustomEvent<{ nodeId: string; position: { x: number; y: number } }>) {
+  const { nodeId, position } = event.detail;
+  const node = nodes.get(nodeId);
+  if (node) {
+   node.position = position;
+   nodes = new Map(nodes);
+  }
+ }
+
  // Reactive statement to update transform
  $: if (canvasElement) updateCanvasTransform();
 
@@ -173,6 +182,7 @@
   on:mouseleave={handleMouseUp}
   on:wheel={handleWheel}
   on:dblclick={handleDoubleClick}
+  on:dragover={(e) => e.preventDefault()}
  >
   <!-- Render connections as SVG -->
   <svg class="connections-layer">
@@ -208,6 +218,7 @@
     on:select={() => handleNodeSelect(node.id)}
     on:connectionStart={() => handleConnectionStart(node.id)}
     on:connectionEnd={() => handleConnectionEnd(node.id)}
+    on:nodeMove={handleNodeMove}
    />
   {/each}
  </div>
@@ -221,12 +232,12 @@
  </div>
 </div>
 
-<style>
+ <style>
  .canvas-container {
   position: relative;
   width: 100%;
   height: 100vh;
-  background-color: #1e1e1e;
+  background-color: #181818;
   overflow: hidden;
   cursor: grab;
  }
@@ -239,12 +250,9 @@
   position: absolute;
   width: 5000px;
   height: 5000px;
-  background-color: #1e1e1e;
-  background-image: 
-   linear-gradient(rgba(80, 80, 80, 0.3) 1px, transparent 1px),
-   linear-gradient(90deg, rgba(80, 80, 80, 0.3) 1px, transparent 1px);
-  background-size: 20px 20px;
+  background-color: #181818;
   transform-origin: 0 0;
+  transition: transform 0.2s ease-out;
  }
 
  .connections-layer {

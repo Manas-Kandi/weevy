@@ -1,0 +1,19 @@
+{
+  "name": "weev-frontend",
+  "version": "1.0.0",
+  "description": "Weev AI Workflow Builder Frontend",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^3.0.0",
+    "svelte": "^4.0.0",
+    "vite": "^5.0.0"
+  },
+  "dependencies": {
+    "lucide-svelte": "^0.300.0"
+  }
+}

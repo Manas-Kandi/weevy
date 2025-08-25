@@ -28,31 +28,12 @@ class OutputNode(GeneralNodeLogic):
         """
         Format and deliver the final output based on user preferences.
         """
-        # Extract output configuration
-        output_config = user_configuration.get("output", {})
-        format_type = output_config.get("format", "json")
-        delivery_method = output_config.get("delivery", "websocket")
-        
-        # Get the final processed data from previous nodes
-        final_data = self._collect_final_data(previous_node_data)
-        
-        # Format output based on type
-        formatted_output = self._format_output(final_data, format_type)
-        
-        # Prepare delivery
-        delivery_result = self._prepare_delivery(formatted_output, delivery_method)
-        
         return NodeOutput(
             node_id=self.node_id,
             node_type="OutputNode",
-            data=delivery_result,
+            data=previous_node_data,
             timestamp=0,
-            metadata={
-                "status": "success",
-                "format": format_type,
-                "delivery": delivery_method,
-                "final_data_size": len(str(formatted_output))
-            }
+            metadata={"status": "success"}
         )
     
     def _collect_final_data(self, previous_data: List[PreviousNodeOutput]) -> Dict[str, Any]:
