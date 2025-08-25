@@ -3,284 +3,524 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Weev - AI Agent Workflow Builder</title>
-    
+    <title>Weev AI Agent Workflow Builder</title>
     <style>
-        * {
+        body {
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f8fafc;
-            color: #1f2937;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
             overflow: hidden;
             height: 100vh;
-            width: 100vw;
-        }
-        
-        /* Main Layout */
-        .app-container {
             display: flex;
-            width: 100vw;
-            height: 100vh;
+            flex-direction: column;
         }
-        
-        /* Components Panel */
-        .components-panel {
-            width: 300px;
-            height: 100vh;
-            background: white;
-            border-right: 1px solid #e5e7eb;
-            overflow-y: auto;
-            flex-shrink: 0;
+
+        #header {
+            background-color: #2d2d2d;
+            padding: 16px;
+            border-bottom: 1px solid #404040;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
-        
-        /* Main Canvas Area */
-        .canvas-container {
-            flex: 1;
-            height: 100vh;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .canvas-workspace {
-            width: 100%;
-            height: 100%;
-            background: #f8fafc;
-            position: relative;
-            cursor: grab;
-        }
-        
-        .canvas-workspace:active {
-            cursor: grabbing;
-        }
-        
-        /* Testing Panel */
-        .testing-panel {
-            width: 350px;
-            height: 100vh;
-            background: white;
-            border-left: 1px solid #e5e7eb;
-            overflow-y: auto;
-            flex-shrink: 0;
-        }
-        
-        /* Panel Headers */
-        .panel-header {
-            padding: 16px 20px;
-            border-bottom: 1px solid #e5e7eb;
-            background: #f9fafb;
-        }
-        
-        .panel-title {
-            font-size: 18px;
+
+        #title {
+            font-size: 24px;
             font-weight: 600;
-            color: #111827;
             margin: 0;
         }
-        
-        .panel-subtitle {
-            font-size: 14px;
-            color: #6b7280;
-            margin: 4px 0 0 0;
+
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            cursor: grab;
         }
-        
-        /* Canvas Grid Background */
-        .canvas-workspace {
-            background-image: 
-                radial-gradient(circle, #e5e7eb 1px, transparent 1px);
-            background-size: 20px 20px;
+
+        #canvas-container:active {
+            cursor: grabbing;
         }
-        
-        /* Canvas Nodes */
-        .canvas-node {
+
+        #canvas {
             position: absolute;
-            min-width: 200px;
-            background: white;
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
-            padding: 16px;
-            cursor: pointer;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-            user-select: none;
-            transition: all 0.2s ease;
+            width: 5000px;
+            height: 5000px;
+            background-color: #1e1e1e;
+            background-image: 
+                linear-gradient(rgba(80, 80, 80, 0.3) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(80, 80, 80, 0.3) 1px, transparent 1px);
+            background-size: 20px 20px;
+            transform-origin: 0 0;
         }
-        
-        .canvas-node:hover {
-            border-color: #3b82f6;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        }
-        
-        .canvas-node.selected {
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
-        
-        .node-header {
+
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
             display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 8px;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 10;
         }
-        
-        .node-icon {
-            width: 24px;
-            height: 24px;
-            border-radius: 4px;
+
+        .control-btn {
+            background-color: #2d2d2d;
+            border: 1px solid #404040;
+            color: #e0e0e0;
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
             display: flex;
             align-items: center;
             justify-content: center;
+            transition: background-color 0.2s;
+        }
+
+        .control-btn:hover {
+            background-color: #3d3d3d;
+        }
+
+        #zoom-level {
+            background-color: #2d2d2d;
+            border: 1px solid #404040;
+            color: #e0e0e0;
+            padding: 8px 12px;
+            border-radius: 8px;
             font-size: 14px;
+            text-align: center;
         }
-        
-        .node-title {
-            font-weight: 600;
-            color: #111827;
-        }
-        
-        .node-type {
-            font-size: 12px;
-            color: #6b7280;
-            background: #f3f4f6;
-            padding: 2px 6px;
-            border-radius: 4px;
-            margin-left: auto;
-        }
-        
-        /* Connection handles */
-        .connection-handle {
-            width: 12px;
-            height: 12px;
-            border: 2px solid #6b7280;
-            border-radius: 50%;
-            background: white;
+
+        .node {
             position: absolute;
-        }
-        
-        .handle-input {
-            left: -8px;
-            top: 50%;
-            transform: translateY(-50%);
-        }
-        
-        .handle-output {
-            right: -8px;
-            top: 50%;
-            transform: translateY(-50%);
-        }
-        
-        .connection-handle:hover {
-            border-color: #3b82f6;
-            background: #3b82f6;
-        }
-        
-        /* Status Messages */
-        .status-message {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 12px 16px;
-            border-radius: 6px;
-            font-weight: 500;
-            z-index: 1000;
-            display: none;
-        }
-        
-        .status-success {
-            background: #d1fae5;
-            border: 1px solid #10b981;
-            color: #065f46;
-        }
-        
-        .status-error {
-            background: #fee2e2;
-            border: 1px solid #ef4444;
-            color: #991b1b;
-        }
-        
-        .status-info {
-            background: #dbeafe;
-            border: 1px solid #3b82f6;
-            color: #1e40af;
-        }
-        
-        /* Buttons */
-        .btn {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 6px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: inline-flex;
+            width: 120px;
+            height: 80px;
+            background-color: #2d2d2d;
+            border: 2px solid #404040;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 6px;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
         }
-        
-        .btn-primary {
-            background: #3b82f6;
-            color: white;
+
+        .node:hover {
+            border-color: #606060;
+            transform: scale(1.05);
         }
-        
-        .btn-primary:hover {
-            background: #2563eb;
+
+        .node.selected {
+            border-color: #6b8cff;
+            box-shadow: 0 0 0 2px rgba(107, 140, 255, 0.3);
         }
-        
-        .btn-secondary {
-            background: #f3f4f6;
-            color: #374151;
-            border: 1px solid #d1d5db;
+
+        .node-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
         }
-        
-        .btn-secondary:hover {
-            background: #e5e7eb;
+
+        .node-label {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        #components-panel {
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            background-color: #2d2d2d;
+            border: 1px solid #404040;
+            border-radius: 8px;
+            padding: 16px;
+            width: 120px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .component {
+            background-color: #3d3d3d;
+            border: 1px solid #505050;
+            border-radius: 6px;
+            padding: 12px;
+            text-align: center;
+            cursor: grab;
+            transition: all 0.2s;
+        }
+
+        .component:hover {
+            background-color: #4d4d4d;
+            border-color: #606060;
+        }
+
+        .component-icon {
+            font-size: 20px;
+            margin-bottom: 6px;
+        }
+
+        .component-label {
+            font-size: 12px;
         }
     </style>
 </head>
 <body>
-    <!-- Main Application Container -->
-    <div class="app-container">
-        
-        <!-- Components Panel (Left Side) -->
-        <div class="components-panel">
-            <div class="panel-header">
-                <h2 class="panel-title">Components</h2>
-                <p class="panel-subtitle">Drag nodes to canvas</p>
-            </div>
-            <div id="components-content">
-                <!-- Components will be rendered here by Components-Panel.ts -->
-            </div>
-        </div>
-        
-        <!-- Main Canvas Area (Center) -->
-        <div class="canvas-container">
-            <div id="canvas-workspace" class="canvas-workspace">
-                <!-- Canvas nodes will be rendered here by Canvas.ts -->
-            </div>
-        </div>
-        
-        <!-- Testing Panel (Right Side) -->
-        <div class="testing-panel">
-            <div class="panel-header">
-                <h2 class="panel-title">Testing</h2>
-                <p class="panel-subtitle">Execute and debug workflows</p>
-            </div>
-            <div id="testing-content">
-                <!-- Testing interface will be rendered here by Testing-Panel.ts -->
-            </div>
-        </div>
-        
+    <div id="header">
+        <h1 id="title">Weev AI Agent Workflow Builder</h1>
     </div>
     
-    <!-- Status Messages -->
-    <div id="status-message" class="status-message">
-        Status message will appear here
+    <div id="canvas-container">
+        <div id="canvas"></div>
+        
+        <div id="components-panel">
+            <div class="component" data-type="brain">
+                <div class="component-icon">🧠</div>
+                <div class="component-label">AI Brain</div>
+            </div>
+            <div class="component" data-type="input">
+                <div class="component-icon">📥</div>
+                <div class="component-label">Input</div>
+            </div>
+            <div class="component" data-type="output">
+                <div class="component-icon">📤</div>
+                <div class="component-label">Output</div>
+            </div>
+            <div class="component" data-type="knowledge">
+                <div class="component-icon">📚</div>
+                <div class="component-label">Knowledge</div>
+            </div>
+        </div>
+        
+        <div id="controls">
+            <div id="zoom-level">100%</div>
+            <button class="control-btn" id="zoom-in">+</button>
+            <button class="control-btn" id="zoom-out">-</button>
+            <button class="control-btn" id="reset-view">↺</button>
+        </div>
     </div>
-    
-    <!-- Load Application -->
-    <script type="module" src="main.js"></script>
+
+    <script>
+        class Canvas {
+            constructor(containerId, canvasId) {
+                this.container = document.getElementById(containerId);
+                this.canvas = document.getElementById(canvasId);
+                this.nodes = new Map();
+                this.connections = new Map();
+                this.selectedNodes = new Set();
+                
+                // Canvas state
+                this.scale = 1;
+                this.offsetX = 0;
+                this.offsetY = 0;
+                this.isDragging = false;
+                this.dragStartX = 0;
+                this.dragStartY = 0;
+                this.canvasStartX = 0;
+                this.canvasStartY = 0;
+                
+                // Node types with their properties
+                this.nodeTypes = {
+                    'brain': { label: 'AI Brain', icon: '🧠', color: '#8B5CF6' },
+                    'input': { label: 'Input', icon: '📥', color: '#3B82F6' },
+                    'output': { label: 'Output', icon: '📤', color: '#10B981' },
+                    'knowledge': { label: 'Knowledge', icon: '📚', color: '#F59E0B' }
+                };
+                
+                this.initializeCanvas();
+                this.initializeEventListeners();
+            }
+            
+            initializeCanvas() {
+                // Set initial canvas position to center
+                const containerRect = this.container.getBoundingClientRect();
+                this.offsetX = (containerRect.width - 5000) / 2;
+                this.offsetY = (containerRect.height - 5000) / 2;
+                this.updateCanvasTransform();
+            }
+            
+            initializeEventListeners() {
+                // Zoom controls
+                document.getElementById('zoom-in').addEventListener('click', () => this.zoom(1.2));
+                document.getElementById('zoom-out').addEventListener('click', () => this.zoom(0.8));
+                document.getElementById('reset-view').addEventListener('click', () => this.resetView());
+                
+                // Canvas dragging
+                this.container.addEventListener('mousedown', (e) => this.startDrag(e));
+                this.container.addEventListener('mousemove', (e) => this.drag(e));
+                this.container.addEventListener('mouseup', () => this.endDrag());
+                this.container.addEventListener('mouseleave', () => this.endDrag());
+                
+                // Zoom with mouse wheel
+                this.container.addEventListener('wheel', (e) => this.handleWheel(e));
+                
+                // Handle node drops from components panel
+                this.container.addEventListener('dragover', (e) => e.preventDefault());
+                this.container.addEventListener('drop', (e) => this.handleDrop(e));
+                
+                // Components panel drag
+                document.querySelectorAll('.component').forEach(component => {
+                    component.addEventListener('dragstart', (e) => this.handleComponentDrag(e));
+                });
+                
+                // Double click to add node
+                this.canvas.addEventListener('dblclick', (e) => this.handleCanvasDoubleClick(e));
+            }
+            
+            handleComponentDrag(e) {
+                const type = e.target.closest('.component').dataset.type;
+                e.dataTransfer.setData('text/plain', type);
+            }
+            
+            handleDrop(e) {
+                e.preventDefault();
+                const nodeType = e.dataTransfer.getData('text/plain');
+                if (nodeType) {
+                    const rect = this.container.getBoundingClientRect();
+                    const x = (e.clientX - rect.left - this.offsetX) / this.scale;
+                    const y = (e.clientY - rect.top - this.offsetY) / this.scale;
+                    this.addNode(nodeType, { x, y });
+                }
+            }
+            
+            handleCanvasDoubleClick(e) {
+                const rect = this.canvas.getBoundingClientRect();
+                const x = (e.clientX - rect.left) / this.scale;
+                const y = (e.clientY - rect.top) / this.scale;
+                
+                // Add a default brain node at the clicked position
+                this.addNode('brain', { x, y });
+            }
+            
+            handleWheel(e) {
+                e.preventDefault();
+                const zoomIntensity = 0.1;
+                const rect = this.container.getBoundingClientRect();
+                
+                // Get mouse position relative to canvas
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                // Calculate canvas position before zoom
+                const canvasX = (mouseX - this.offsetX) / this.scale;
+                const canvasY = (mouseY - this.offsetY) / this.scale;
+                
+                // Apply zoom
+                const wheel = e.deltaY < 0 ? 1 : -1;
+                this.scale *= (1 + wheel * zoomIntensity);
+                
+                // Limit zoom scale
+                this.scale = Math.min(Math.max(0.1, this.scale), 5);
+                
+                // Calculate new offset to zoom towards mouse position
+                this.offsetX = mouseX - canvasX * this.scale;
+                this.offsetY = mouseY - canvasY * this.scale;
+                
+                this.updateCanvasTransform();
+                this.updateZoomLevelDisplay();
+            }
+            
+            startDrag(e) {
+                if (e.target === this.canvas || e.target.id === 'canvas-container') {
+                    this.isDragging = true;
+                    this.dragStartX = e.clientX;
+                    this.dragStartY = e.clientY;
+                    this.canvasStartX = this.offsetX;
+                    this.canvasStartY = this.offsetY;
+                    this.container.style.cursor = 'grabbing';
+                }
+            }
+            
+            drag(e) {
+                if (this.isDragging) {
+                    const deltaX = e.clientX - this.dragStartX;
+                    const deltaY = e.clientY - this.dragStartY;
+                    this.offsetX = this.canvasStartX + deltaX;
+                    this.offsetY = this.canvasStartY + deltaY;
+                    this.updateCanvasTransform();
+                }
+            }
+            
+            endDrag() {
+                this.isDragging = false;
+                this.container.style.cursor = 'grab';
+            }
+            
+            zoom(factor) {
+                this.scale *= factor;
+                this.scale = Math.min(Math.max(0.1, this.scale), 5);
+                this.updateCanvasTransform();
+                this.updateZoomLevelDisplay();
+            }
+            
+            resetView() {
+                this.scale = 1;
+                const containerRect = this.container.getBoundingClientRect();
+                this.offsetX = (containerRect.width - 5000) / 2;
+                this.offsetY = (containerRect.height - 5000) / 2;
+                this.updateCanvasTransform();
+                this.updateZoomLevelDisplay();
+            }
+            
+            updateCanvasTransform() {
+                this.canvas.style.transform = `translate(${this.offsetX}px, ${this.offsetY}px) scale(${this.scale})`;
+            }
+            
+            updateZoomLevelDisplay() {
+                document.getElementById('zoom-level').textContent = `${Math.round(this.scale * 100)}%`;
+            }
+            
+            addNode(type, position) {
+                const nodeId = `node_${Date.now()}`;
+                const nodeData = this.nodeTypes[type];
+                
+                if (!nodeData) {
+                    console.error(`Unknown node type: ${type}`);
+                    return;
+                }
+                
+                const node = {
+                    id: nodeId,
+                    type,
+                    position,
+                    data: {
+                        label: nodeData.label,
+                        configuration: {}
+                    },
+                    selected: false
+                };
+                
+                this.nodes.set(nodeId, node);
+                this.renderNode(node);
+                console.log(`Added ${type} node at`, position);
+                return nodeId;
+            }
+            
+            renderNode(node) {
+                const nodeElement = document.createElement('div');
+                nodeElement.id = `node-${node.id}`;
+                nodeElement.className = `node ${node.selected ? 'selected' : ''}`;
+                nodeElement.style.left = `${node.position.x}px`;
+                nodeElement.style.top = `${node.position.y}px`;
+                
+                const nodeData = this.nodeTypes[node.type];
+                nodeElement.innerHTML = `
+                    <div class="node-icon">${nodeData.icon}</div>
+                    <div class="node-label">${node.data.label}</div>
+                `;
+                
+                // Add event listeners for node interaction
+                nodeElement.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.selectNode(node.id);
+                });
+                
+                nodeElement.addEventListener('dblclick', (e) => {
+                    e.stopPropagation();
+                    this.openNodeConfiguration(node.id);
+                });
+                
+                this.canvas.appendChild(nodeElement);
+            }
+            
+            selectNode(nodeId) {
+                // Clear previous selections
+                this.selectedNodes.forEach(id => {
+                    const element = document.getElementById(`node-${id}`);
+                    if (element) {
+                        element.classList.remove('selected');
+                    }
+                });
+                this.selectedNodes.clear();
+                
+                // Select new node
+                const node = this.nodes.get(nodeId);
+                if (node) {
+                    node.selected = true;
+                    this.selectedNodes.add(nodeId);
+                    const element = document.getElementById(`node-${nodeId}`);
+                    if (element) {
+                        element.classList.add('selected');
+                    }
+                }
+            }
+            
+            openNodeConfiguration(nodeId) {
+                const node = this.nodes.get(nodeId);
+                if (node) {
+                    alert(`Opening configuration for ${node.data.label} node (${nodeId})`);
+                    // In a full implementation, this would open a configuration panel
+                }
+            }
+            
+            getNodes() {
+                return Array.from(this.nodes.values());
+            }
+            
+            getSelectedNodes() {
+                return Array.from(this.selectedNodes)
+                    .map(id => this.nodes.get(id))
+                    .filter(node => node !== undefined);
+            }
+            
+            deleteSelectedNodes() {
+                this.selectedNodes.forEach(nodeId => {
+                    this.deleteNode(nodeId);
+                });
+                this.selectedNodes.clear();
+            }
+            
+            deleteNode(nodeId) {
+                // Remove from DOM
+                const element = document.getElementById(`node-${nodeId}`);
+                if (element) {
+                    element.remove();
+                }
+                
+                // Remove from data structures
+                this.nodes.delete(nodeId);
+                
+                // Remove any connections to this node
+                this.connections.forEach((connection, connId) => {
+                    if (connection.source === nodeId || connection.target === nodeId) {
+                        this.connections.delete(connId);
+                    }
+                });
+            }
+            
+            serialize() {
+                return {
+                    nodes: Array.from(this.nodes.values()),
+                    connections: Array.from(this.connections.values())
+                };
+            }
+            
+            clearCanvas() {
+                this.canvas.innerHTML = '';
+                this.nodes.clear();
+                this.connections.clear();
+                this.selectedNodes.clear();
+                console.log('Canvas cleared');
+            }
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvas = new Canvas('canvas-container', 'canvas');
+            
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Delete') {
+                    canvas.deleteSelectedNodes();
+                }
+            });
+        });
+    </script>
 </body>
 </html>
