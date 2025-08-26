@@ -24,7 +24,6 @@
  let canvasStartY = 0;
 
  let draggedNodeId: string | null = null;
- let draggedNodeElement: HTMLDivElement | null = null;
  let initialNodePosition: { x: number; y: number } = { x: 0, y: 0 };
  let initialMouseX = 0;
  let initialMouseY = 0;
@@ -65,33 +64,22 @@
    offsetX = canvasStartX + deltaX;
    offsetY = canvasStartY + deltaY;
    updateCanvasTransform();
-  } else if (draggedNodeId && draggedNodeElement) {
+  } else if (draggedNodeId) {
    const dx = e.clientX - initialMouseX;
    const dy = e.clientY - initialMouseY;
-
-   const newX = initialNodePosition.x + dx / scale;
-   const newY = initialNodePosition.y + dy / scale;
-
-   draggedNodeElement.style.transform = `translate(${newX}px, ${newY}px)`;
-  }
- }
-
- function handleMouseUp() {
-  if (draggedNodeId && draggedNodeElement) {
    const node = nodes.get(draggedNodeId);
    if (node) {
-    const transform = getComputedStyle(draggedNodeElement).transform;
-    const matrix = new DOMMatrixReadOnly(transform);
-    node.position.x = matrix.m41;
-    node.position.y = matrix.m42;
+    node.position.x = initialNodePosition.x + dx / scale;
+    node.position.y = initialNodePosition.y + dy / scale;
     nodes = nodes; // Trigger reactivity
    }
-   draggedNodeElement.style.transform = ''; // Clear transform
   }
+}
+
+function handleMouseUp() {
   isDraggingCanvas = false;
   draggedNodeId = null;
-  draggedNodeElement = null;
- }
+}
 
  function handleDoubleClick(e: MouseEvent) {
   if (e.target === canvasElement) {
@@ -167,18 +155,19 @@
   connectionStart = null;
  }
 
- function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEvent; element: HTMLDivElement }>) {
-  const { nodeId, event: mouseEvent, element } = event.detail;
-  draggedNodeId = nodeId;
-  draggedNodeElement = element;
-  const node = nodes.get(nodeId);
-  if (node) {
-   initialNodePosition.x = node.position.x;
-   initialNodePosition.y = node.position.y;
-   initialMouseX = mouseEvent.clientX;
-   initialMouseY = mouseEvent.clientY;
-  }
+function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEvent }>) {
+ const { nodeId, event: mouseEvent } = event.detail;
+ draggedNodeId = nodeId;
+ const node = nodes.get(nodeId);
+ if (node) {
+  initialNodePosition.x = node.position.x;
+  initialNodePosition.y = node.position.y;
  }
+ initialMouseX = mouseEvent.clientX;
+ initialMouseY = mouseEvent.clientY;
+ // ensure canvas dragging is off while dragging node
+ isDraggingCanvas = false;
+}
 
  // Reactive statement to update transform
  $: if (canvasElement) updateCanvasTransform();
@@ -274,6 +263,7 @@
   height: 5000px;
   background-color: #181818;
   transform-origin: 0 0;
+  user-select: none;
  }
 
  .connections-layer {

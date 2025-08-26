@@ -4,6 +4,7 @@
  import ComponentsPanel from './ComponentsPanel.svelte';
  import { websocketService } from './websocket';
  import type { Node, Connection, ExecutionUpdate } from './types';
+ import ToolConfigPanel from './ToolConfigPanel.svelte';
 
  let nodes: Map<string, Node> = new Map();
  let connections: Map<string, Connection> = new Map();
@@ -42,7 +43,9 @@
    },
    data: {
     label: nodeTypes[event.detail.type as keyof typeof nodeTypes],
-    configuration: {}
+    configuration: event.detail.type === 'tool' 
+      ? { tool: 'email', action: 'draft', params: { to: ['user@example.com'], subject: 'Hello' }, mock: true }
+      : {}
    }
   };
 
@@ -57,7 +60,8 @@
    brain: 'AI Brain',
    input: 'Input',
    output: 'Output', 
-   knowledge: 'Knowledge'
+   knowledge: 'Knowledge',
+   tool: 'Tool'
   };
   
   const newNode: Node = {
@@ -66,7 +70,9 @@
    position: event.detail.position,
    data: {
     label: nodeTypes[event.detail.type as keyof typeof nodeTypes],
-    configuration: {}
+    configuration: event.detail.type === 'tool' 
+      ? { tool: 'email', action: 'draft', params: { to: ['user@example.com'], subject: 'Hello' }, mock: true }
+      : {}
    }
   };
 
@@ -107,8 +113,16 @@
   };
 
   executionResults = []; // Clear previous results
-  websocketService.executeWorkflow(workflow);
- }
+ websocketService.executeWorkflow(workflow);
+}
+
+function handleToolConfigUpdate(event: CustomEvent<{ configuration: Record<string, any> }>) {
+  if (!selectedNodeId) return;
+  const node = nodes.get(selectedNodeId);
+  if (!node) return;
+  node.data.configuration = event.detail.configuration;
+  nodes = nodes; // trigger reactivity
+}
 </script>
 
 <svelte:head>
@@ -136,6 +150,13 @@
    on:nodeSelect={handleNodeSelect}
    on:connectionCreate={handleConnectionCreate}
   />
+
+  {#if selectedNodeId}
+    {@const sel = nodes.get(selectedNodeId)}
+    {#if sel && sel.type === 'tool'}
+      <ToolConfigPanel node={sel} on:updateConfig={handleToolConfigUpdate} />
+    {/if}
+  {/if}
 
   <!-- Execution Results Panel -->
   {#if executionResults.length > 0}

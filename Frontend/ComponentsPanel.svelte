@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
-	import { Brain, FileInput, FileOutput, BookOpen, Tool } from 'lucide-svelte';
+	import { Brain, FileInput, FileOutput, BookOpen, Wrench } from 'lucide-svelte';
 
 	const dispatch = createEventDispatcher<{
 		nodeAdd: { type: string };
@@ -11,7 +11,7 @@
 		{ type: 'input', label: 'Input', icon: FileInput, color: '#3B82F6' },
 		{ type: 'output', label: 'Output', icon: FileOutput, color: '#10B981' },
 		{ type: 'knowledge', label: 'Knowledge', icon: BookOpen, color: '#F59E0B' },
-		{ type: 'tool', label: 'Tool', icon: Tool, color: '#EF4444' }
+		{ type: 'tool', label: 'Tool', icon: Wrench, color: '#EF4444' }
 	];
 
 	function handleNodeAdd(type: string) {

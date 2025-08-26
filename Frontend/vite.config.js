@@ -6,9 +6,13 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/api': 'http://localhost:8000',
+      '/api': 'http://localhost:8004',
       '/ws': {
-        target: 'ws://localhost:8000',
+        target: 'ws://localhost:8004',
+        ws: true
+      },
+      '/ws/canvas': {
+        target: 'ws://localhost:8004',
         ws: true
       }
     }

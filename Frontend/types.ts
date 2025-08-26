@@ -35,10 +35,20 @@ export interface NodeResult {
 }
 
 export interface ExecutionUpdate {
-  type: 'execution_started' | 'execution_update' | 'node_result' | 'execution_complete' | 'execution_error';
+  type:
+    | 'execution_started'
+    | 'execution_update'
+    | 'node_result'
+    | 'execution_complete'
+    | 'execution_error'
+    // backend executor events
+    | 'workflow_started'
+    | 'node_executed'
+    | 'workflow_finished';
   node_id?: string;
   content?: string;
   result?: any;
   error?: string;
   workflow_id?: string;
+  message?: string;
 }

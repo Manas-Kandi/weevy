@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
 	import type { Node } from './types';
-	import { Brain, FileInput, FileOutput, BookOpen, Tool } from 'lucide-svelte';
+	import { Brain, FileInput, FileOutput, BookOpen, Wrench } from 'lucide-svelte';
 
 	export let node: Node;
 	export let selected: boolean = false;
@@ -18,7 +18,7 @@
 		input: FileInput,
 		output: FileOutput,
 		knowledge: BookOpen,
-		tool: Tool
+		tool: Wrench
 	};
 
 	const nodeColors = {

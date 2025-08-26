@@ -21,7 +21,7 @@ echo "Backend: http://localhost:8004"
 echo "Frontend: http://localhost:3000"
 
 # Start backend in background
-( cd backend && python -m uvicorn main:app --host 0.0.0.0 --port 8004 --reload ) &
+( cd Backend && python -m uvicorn main:app --host 0.0.0.0 --port 8004 --reload ) &
 BACKEND_PID=$!
 
 # Start frontend from frontend directory
