@@ -32,14 +32,16 @@
  let isConnecting = false;
  let connectionStart: string | null = null;
 
- onMount(() => {
+onMount(() => {
   const containerRect = canvasElement.parentElement?.getBoundingClientRect();
   if (containerRect) {
    offsetX = containerRect.width / 2 - 2500 * scale;
    offsetY = containerRect.height / 2 - 2500 * scale;
   }
   updateCanvasTransform();
- });
+});
+
+ // Minimap removed; no viewport tracking needed
 
  function updateCanvasTransform() {
   if (canvasElement) {
@@ -202,23 +204,22 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
     {@const fromNode = nodes.get(connection.from)}
     {@const toNode = nodes.get(connection.to)}
     {#if fromNode && toNode}
-     <line
-      x1={fromNode.position.x + 60}
-      y1={fromNode.position.y + 40}
-      x2={toNode.position.x}
-      y2={toNode.position.y + 40}
-      stroke="#666"
-      stroke-width="2"
-      marker-end="url(#arrowhead)"
-     />
+      {@const x1 = fromNode.position.x + 160}
+      {@const y1 = fromNode.position.y + 44}
+      {@const x2 = toNode.position.x}
+      {@const y2 = toNode.position.y + 44}
+      {@const dx = Math.max(40, Math.abs(x2 - x1) * 0.35)}
+      <path class="edge" d={`M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`} />
     {/if}
    {/each}
-   <!-- Arrow marker definition -->
    <defs>
-    <marker id="arrowhead" markerWidth="10" markerHeight="7" 
-      refX="9" refY="3.5" orient="auto">
-     <polygon points="0 0, 10 3.5, 0 7" fill="#666" />
-    </marker>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur" />
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
    </defs>
   </svg>
 
@@ -234,13 +235,7 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
   {/each}
  </div>
 
- <!-- Controls -->
- <div class="controls">
-  <div class="zoom-level">{Math.round(scale * 100)}%</div>
-  <button class="control-btn" on:click={() => zoom(1.2)}>+</button>
-  <button class="control-btn" on:click={() => zoom(0.8)}>-</button>
-  <button class="control-btn" on:click={resetView}>↺</button>
- </div>
+ <!-- Canvas controls and minimap removed per design request -->
 </div>
 
  <style>
@@ -266,7 +261,7 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
   user-select: none;
  }
 
- .connections-layer {
+.connections-layer {
   position: absolute;
   top: 0;
   left: 0;
@@ -274,44 +269,16 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
   height: 100%;
   pointer-events: none;
   z-index: 1;
- }
+}
 
- .controls {
-  position: absolute;
-  bottom: 20px;
-  right: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  z-index: 10;
- }
+.edge {
+  fill: none;
+  stroke: rgba(255,255,255,0.35);
+  stroke-width: 2;
+  filter: url(#glow);
+  transition: stroke-width 160ms ease, stroke 160ms ease;
+}
+.edge:hover { stroke-width: 3.5; stroke: var(--accent); }
 
- .control-btn {
-  background-color: #2d2d2d;
-  border: 1px solid #404040;
-  color: #e0e0e0;
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.2s;
- }
-
- .control-btn:hover {
-  background-color: #3d3d3d;
- }
-
- .zoom-level {
-  background-color: #2d2d2d;
-  border: 1px solid #404040;
-  color: #e0e0e0;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 14px;
-  text-align: center;
- }
+/* Controls and minimap styles removed */
 </style>

@@ -1,28 +1,95 @@
 <script lang="ts">
  import { onMount } from 'svelte';
  import Canvas from './Canvas.svelte';
- import ComponentsPanel from './ComponentsPanel.svelte';
+import ComponentsPanel from './ComponentsPanel.svelte';
  import { websocketService } from './websocket';
  import type { Node, Connection, ExecutionUpdate } from './types';
  import ToolConfigPanel from './ToolConfigPanel.svelte';
 
- let nodes: Map<string, Node> = new Map();
- let connections: Map<string, Connection> = new Map();
- let selectedNodeId: string | null = null;
- let executionResults: ExecutionUpdate[] = [];
+let nodes: Map<string, Node> = new Map();
+let connections: Map<string, Connection> = new Map();
+let selectedNodeId: string | null = null;
+let executionResults: ExecutionUpdate[] = [];
 
- onMount(() => {
-  // Connect to WebSocket
-  websocketService.connect();
-  websocketService.onMessage((data: ExecutionUpdate) => {
-   executionResults = [...executionResults, data];
-   console.log('📨 Execution update:', data);
-  });
+type Project = {
+  id: string;
+  name: string;
+  updatedAt: string;
+  data: {
+    nodes: Node[];
+    connections: Connection[];
+  };
+};
+
+let projects: Project[] = [];
+let currentProjectId: string = 'new';
+let sidebarCollapsed: boolean = false;
+
+function saveProjects() {
+  localStorage.setItem('weev-projects', JSON.stringify(projects));
+}
+
+function loadProjects() {
+  const raw = localStorage.getItem('weev-projects');
+  if (raw) {
+    try {
+      const parsed: Project[] = JSON.parse(raw);
+      projects = parsed;
+      if (projects.length > 0) {
+        currentProjectId = projects[0].id;
+        loadProjectIntoCanvas(projects[0]);
+        return;
+      }
+    } catch {}
+  }
+  // initialize first project if none
+  const first: Project = {
+    id: `proj_${Date.now()}`,
+    name: 'Untitled',
+    updatedAt: new Date().toISOString(),
+    data: { nodes: [], connections: [] }
+  };
+  projects = [first];
+  currentProjectId = first.id;
+  saveProjects();
+  loadProjectIntoCanvas(first);
+}
+
+function loadProjectIntoCanvas(p: Project) {
+  nodes = new Map(p.data.nodes.map(n => [n.id, structuredClone(n)]));
+  connections = new Map(p.data.connections.map(c => [c.id, structuredClone(c)]));
+  selectedNodeId = null;
+}
+
+function persistCurrentProject() {
+  const idx = projects.findIndex(p => p.id === currentProjectId);
+  if (idx === -1) return;
+  projects[idx] = {
+    ...projects[idx],
+    updatedAt: new Date().toISOString(),
+    data: {
+      nodes: Array.from(nodes.values()),
+      connections: Array.from(connections.values())
+    }
+  };
+  saveProjects();
+}
+
+onMount(() => {
+ // Load projects
+ loadProjects();
+
+ // Connect to WebSocket
+ websocketService.connect();
+ websocketService.onMessage((data: ExecutionUpdate) => {
+  executionResults = [...executionResults, data];
+  console.log('📨 Execution update:', data);
+ });
 
   return () => {
-   websocketService.disconnect();
-  };
- });
+  websocketService.disconnect();
+ };
+});
 
  function handleNodeAdd(event: CustomEvent<{ type: string }>) {
   const nodeId = `node_${Date.now()}`;
@@ -52,7 +119,8 @@
   nodes.set(nodeId, newNode);
   nodes = nodes; // Trigger reactivity
   selectedNodeId = nodeId;
- }
+  persistCurrentProject();
+}
 
  function handleCanvasNodeAdd(event: CustomEvent<{ type: string; position: { x: number; y: number } }>) {
   const nodeId = `node_${Date.now()}`;
@@ -79,7 +147,8 @@
   nodes.set(nodeId, newNode);
   nodes = nodes; // Trigger reactivity
   selectedNodeId = nodeId;
- }
+  persistCurrentProject();
+}
 
  function handleNodeSelect(event: CustomEvent<{ nodeId: string }>) {
   selectedNodeId = event.detail.nodeId;
@@ -93,7 +162,8 @@
    to: event.detail.to
   });
   connections = connections; // Trigger reactivity
- }
+  persistCurrentProject();
+}
 
  function executeWorkflow() {
   if (nodes.size === 0) {
@@ -113,7 +183,7 @@
   };
 
   executionResults = []; // Clear previous results
- websocketService.executeWorkflow(workflow);
+websocketService.executeWorkflow(workflow);
 }
 
 function handleToolConfigUpdate(event: CustomEvent<{ configuration: Record<string, any> }>) {
@@ -122,6 +192,45 @@ function handleToolConfigUpdate(event: CustomEvent<{ configuration: Record<strin
   if (!node) return;
   node.data.configuration = event.detail.configuration;
   nodes = nodes; // trigger reactivity
+  persistCurrentProject();
+}
+
+function handleNewProject() {
+  const p: Project = {
+    id: `proj_${Date.now()}`,
+    name: 'Untitled',
+    updatedAt: new Date().toISOString(),
+    data: { nodes: [], connections: [] }
+  };
+  projects = [p, ...projects];
+  currentProjectId = p.id;
+  saveProjects();
+  loadProjectIntoCanvas(p);
+}
+
+function handleSelectProject(id: string) {
+  const p = projects.find(pp => pp.id === id);
+  if (!p) return;
+  currentProjectId = id;
+  loadProjectIntoCanvas(p);
+}
+
+function handleDeleteProject(id: string) {
+  const idx = projects.findIndex(p => p.id === id);
+  if (idx === -1) return;
+  const deletingCurrent = projects[idx].id === currentProjectId;
+  projects.splice(idx, 1);
+  saveProjects();
+  if (projects.length === 0) {
+    // create a fresh project
+    handleNewProject();
+    return;
+  }
+  if (deletingCurrent) {
+    const next = projects[0];
+    currentProjectId = next.id;
+    loadProjectIntoCanvas(next);
+  }
 }
 </script>
 
@@ -130,165 +239,45 @@ function handleToolConfigUpdate(event: CustomEvent<{ configuration: Record<strin
 </svelte:head>
 
 <div class="app">
- <!-- Header -->
- <header class="header">
-  <h1>Weev AI Agent Workflow Builder</h1>
-  <button class="execute-btn" on:click={executeWorkflow}>
-   ▶ Execute Workflow
-  </button>
- </header>
-
- <!-- Main Canvas Area -->
- <main class="main">
-  <ComponentsPanel on:nodeAdd={handleNodeAdd} />
   
-  <Canvas 
-   bind:nodes
-   bind:connections
-   bind:selectedNodeId
-   on:nodeAdd={handleCanvasNodeAdd}
-   on:nodeSelect={handleNodeSelect}
-   on:connectionCreate={handleConnectionCreate}
-  />
-
-  {#if selectedNodeId}
-    {@const sel = nodes.get(selectedNodeId)}
-    {#if sel && sel.type === 'tool'}
-      <ToolConfigPanel node={sel} on:updateConfig={handleToolConfigUpdate} />
-    {/if}
-  {/if}
-
-  <!-- Execution Results Panel -->
-  {#if executionResults.length > 0}
-   <div class="results-panel">
-    <h3>Execution Results</h3>
-    <div class="results-content">
-     {#each executionResults as result}
-      <div class="result-item" class:error={result.type === 'execution_error'}>
-       <strong>{result.type}</strong>
-       {#if result.content}
-        <p>{result.content}</p>
-       {/if}
-       {#if result.result}
-        <pre>{JSON.stringify(result.result, null, 2)}</pre>
-       {/if}
-       {#if result.error}
-        <p class="error-text">{result.error}</p>
-       {/if}
-      </div>
-     {/each}
-    </div>
-   </div>
-  {/if}
- </main>
+  <main class="main" style={`margin-left: ${sidebarCollapsed ? '56px' : '200px'}` }>
+    <ComponentsPanel 
+      projects={projects}
+      currentProjectId={currentProjectId}
+      collapsed={sidebarCollapsed}
+      on:toggleCollapse={() => (sidebarCollapsed = !sidebarCollapsed)}
+      on:newProject={handleNewProject}
+      on:selectProject={(e) => handleSelectProject(e.detail.id)}
+      on:deleteProject={(e) => handleDeleteProject(e.detail.id)}
+      on:nodeAdd={handleNodeAdd}
+      on:run={executeWorkflow}
+    />
+    <Canvas 
+      bind:nodes
+      bind:connections
+      bind:selectedNodeId
+      on:nodeAdd={handleCanvasNodeAdd}
+      on:nodeSelect={handleNodeSelect}
+      on:connectionCreate={handleConnectionCreate}
+    />
+    
+  </main>
 </div>
 
 <style>
- .app {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  background-color: #181818;
-  color: #e0e0e0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
- }
+.app { display:flex; flex-direction: column; height: 100vh; }
+.topbar { height: 56px; display:flex; align-items:center; padding: 0 16px; gap: 12px; }
+.topbar.minimal { background: transparent; box-shadow: none; border: none; }
+.brand { font-weight: 600; letter-spacing: 0.2px; font-size: 14px; }
+.spacer { flex: 1; }
+.actions { display:flex; gap:10px; }
+.btn { background: rgba(255,255,255,0.06); color: var(--text); border: none; border-radius: 0; padding: 6px 12px; cursor: pointer; transition: background 160ms ease; }
+.btn:hover { background: rgba(255,255,255,0.1); }
+.btn.ghost { background: transparent; }
 
- .header {
-  background-color: #202020;
-  padding: 16px;
-  border-bottom: 1px solid #303030;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
- }
-
- .header h1 {
-  font-size: 20px;
-  font-weight: 500;
-  margin: 0;
- }
-
- .execute-btn {
-  background-color: #3B82F6;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s;
- }
-
- .execute-btn:hover {
-  background-color: #2563EB;
- }
-
- .main {
+.main {
   flex: 1;
   position: relative;
   overflow: hidden;
- }
-
- .results-panel {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  width: 350px;
-  max-height: 500px;
-  background-color: #202020;
-  border: 1px solid #303030;
-  border-radius: 8px;
-  padding: 16px;
-  z-index: 10;
-  overflow-y: auto;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
- }
-
- .results-panel h3 {
-  margin: 0 0 12px 0;
-  font-size: 16px;
-  font-weight: 500;
- }
-
- .result-item {
-  margin-bottom: 12px;
-  padding: 12px;
-  background-color: #282828;
-  border-radius: 6px;
-  border-left: 3px solid #3B82F6;
- }
-
- .result-item.error {
-  border-left-color: #EF4444;
- }
-
- .result-item strong {
-  color: #3B82F6;
-  text-transform: uppercase;
-  font-size: 12px;
-  font-weight: 600;
- }
-
- .result-item.error strong {
-  color: #EF4444;
- }
-
- .result-item p {
-  margin: 8px 0;
-  font-size: 14px;
- }
-
- .result-item pre {
-  background-color: #181818;
-  padding: 12px;
-  border-radius: 4px;
-  font-size: 13px;
-  overflow-x: auto;
-  margin: 8px 0;
- }
-
- .error-text {
-  color: #EF4444;
  }
 </style>

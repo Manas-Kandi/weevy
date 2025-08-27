@@ -3,8 +3,33 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Weev AI Workflow Builder</title>
-	</head>
+    <title>Weev AI Workflow Builder</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --bg: #0f1115;
+        --panel: rgba(255,255,255,0.06);
+        --border: rgba(255,255,255,0.12);
+        --text: #e6e8ee;
+        --muted: #a7adbb;
+        --glass: rgba(255,255,255,0.08);
+        --accent: #6ea8fe;
+        --success: #10B981;
+        --warning: #F59E0B;
+        --error: #EF4444;
+        --running: #3B82F6;
+      }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        background: radial-gradient(1500px 800px at 70% -20%, #1a1d25 0%, #0f1115 60%), var(--bg);
+        color: var(--text);
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      }
+    </style>
+  </head>
 	<body>
 		<div id="app"></div>
 		<script type="module" src="/main.js"></script>
