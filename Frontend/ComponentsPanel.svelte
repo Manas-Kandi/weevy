@@ -371,6 +371,23 @@ let searchFocused: boolean = false;
     z-index: 15;
   }
 
+  .sidebar {
+    width: 240px;
+    height: 100vh;
+    background: white;
+    border-right: 1px solid #E8E8E8;
+    padding: 0;
+    flex-shrink: 0;
+    overflow-y: auto;
+    transition: width 200ms ease;
+    font-family: 'Inter', sans-serif;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 10;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  }
+
   .sidebar.collapsed .collapse-btn {
     top: 8px;
     right: 6px;

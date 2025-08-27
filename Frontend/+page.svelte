@@ -244,7 +244,15 @@ function handleDeleteProject(id: string) {
 
 <div class="app">
   
-  <main class="main" style={`margin-left: ${sidebarCollapsed ? '76px' : '320px'}` }>
+  <main class="main">
+    <Canvas 
+      bind:nodes
+      bind:connections
+      bind:selectedNodeId
+      on:nodeAdd={handleCanvasNodeAdd}
+      on:nodeSelect={handleNodeSelect}
+      on:connectionCreate={handleConnectionCreate}
+    />
     <ComponentsPanel 
       projects={projects}
       currentProjectId={currentProjectId}
@@ -256,15 +264,6 @@ function handleDeleteProject(id: string) {
       on:nodeAdd={handleNodeAdd}
       on:run={executeWorkflow}
     />
-    <Canvas 
-      bind:nodes
-      bind:connections
-      bind:selectedNodeId
-      on:nodeAdd={handleCanvasNodeAdd}
-      on:nodeSelect={handleNodeSelect}
-      on:connectionCreate={handleConnectionCreate}
-    />
-    
   </main>
 </div>
 
