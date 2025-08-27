@@ -5,7 +5,7 @@ Main FastAPI backend server for Weev AI Agent Workflow Platform
 import os
 import json
 import asyncio
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -17,6 +17,13 @@ from InputNode import InputNode
 from OutputNode import OutputNode
 from KnowledgeBaseNode import KnowledgeBaseNode
 from WorkflowExecutor import WorkflowExecutor
+
+# DB and routers
+from database.connection import init_db, close_db, db_health, AsyncSessionLocal
+from database.models import Project, WorkflowNode, NodeConnection, WorkflowExecution
+from api.projects import router as projects_router
+from api.nodes import router as nodes_router
+from api.executions import router as executions_router
 
 # Load environment variables
 load_dotenv()
@@ -96,6 +103,25 @@ async def root():
 async def health_check():
     return {"status": "healthy", "timestamp": asyncio.get_event_loop().time()}
 
+@app.get("/health/db")
+async def health_check_db():
+    ok = await db_health()
+    return {"database": "ok" if ok else "down"}
+
+# Routers
+app.include_router(projects_router)
+app.include_router(nodes_router)
+app.include_router(executions_router)
+
+# Lifespan events
+@app.on_event("startup")
+async def on_startup():
+    await init_db()
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    await close_db()
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
@@ -130,23 +156,71 @@ async def canvas_websocket(websocket: WebSocket):
         manager.disconnect(websocket)
 
 async def handle_workflow_execution(workflow_data: Dict[str, Any], websocket: WebSocket):
-    """Handle workflow execution with streaming updates"""
+    """Handle workflow execution with streaming updates. Supports either inline payload
+    (nodes + connections) or a DB-backed run via project_id. Optionally accepts execution_id.
+    """
+    session = None
     try:
-        workflow_id = workflow_data.get("workflow_id", "unknown")
-        
+        execution_id: Optional[str] = workflow_data.get("execution_id")
+        project_id: Optional[str] = workflow_data.get("project_id")
+        workflow_id = workflow_data.get("workflow_id") or execution_id or project_id or "unknown"
+
+        nodes = workflow_data.get("nodes")
+        connections = workflow_data.get("connections")
+
+        # If project_id is provided, build workflow from DB
+        if project_id and (nodes is None or connections is None):
+            session = AsyncSessionLocal()
+            proj = await session.get(Project, project_id)
+            if not proj:
+                raise ValueError("Project not found")
+            # Ensure an execution record exists
+            if not execution_id:
+                exe = WorkflowExecution(project_id=proj.id, status="running")
+                session.add(exe)
+                await session.commit()
+                await session.refresh(exe)
+                execution_id = str(exe.id)
+            # Fetch nodes and connections
+            node_rows = (await session.execute(
+                __import__('sqlalchemy').select(WorkflowNode).where(WorkflowNode.project_id == proj.id)
+            )).scalars().all()
+            conn_rows = (await session.execute(
+                __import__('sqlalchemy').select(NodeConnection).where(NodeConnection.project_id == proj.id)
+            )).scalars().all()
+            nodes = [
+                {
+                    "node_id": str(n.id),
+                    "node_type": n.node_type,
+                    "system_rules": f"Execute {n.node_type} node",
+                    "user_configuration": n.configuration or {},
+                }
+                for n in node_rows
+            ]
+            connections = [
+                {"from": str(c.from_node_id), "to": str(c.to_node_id)} for c in conn_rows
+            ]
+
         await manager.send_personal_message(json.dumps({
             "type": "execution_started",
-            "workflow_id": workflow_id
+            "workflow_id": workflow_id,
+            "execution_id": execution_id,
         }), websocket)
 
-        executor = WorkflowExecutor(workflow_data, manager)
+        # Execute
+        workflow_payload = {"workflow_id": workflow_id, "nodes": nodes or [], "connections": connections or []}
+        executor = WorkflowExecutor(workflow_payload, manager, execution_id=execution_id, db_session=session)
         await executor.execute()
 
     except Exception as e:
         await manager.send_personal_message(json.dumps({
             "type": "execution_error",
-            "error": str(e)
+            "error": str(e),
+            "execution_id": workflow_data.get("execution_id"),
         }), websocket)
+    finally:
+        if session is not None:
+            await session.close()
 
 async def handle_node_status(data: Dict[str, Any], websocket: WebSocket):
     """Handle node status requests"""

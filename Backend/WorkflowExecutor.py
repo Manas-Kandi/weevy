@@ -1,6 +1,7 @@
 
 import asyncio
-from typing import Any, Dict, List
+import uuid
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 from BrainNode import BrainNode
@@ -9,6 +10,8 @@ from OutputNode import OutputNode
 from KnowledgeBaseNode import KnowledgeBaseNode
 from ToolNode import ToolNode
 from GeneralNodeLogic import NodeInputs, WorkflowMemory, PreviousNodeOutput
+from sqlalchemy.ext.asyncio import AsyncSession
+from database.models import WorkflowExecution
 
 # Support both canonical short types and class-like names
 NODE_CLASSES = {
@@ -27,9 +30,11 @@ NODE_CLASSES = {
 }
 
 class WorkflowExecutor:
-    def __init__(self, workflow: Dict[str, Any], manager):
+    def __init__(self, workflow: Dict[str, Any], manager, execution_id: Optional[str] = None, db_session: Optional[AsyncSession] = None):
         self.workflow = workflow
         self.manager = manager
+        self.execution_id = execution_id
+        self.db_session = db_session
         self.node_results: Dict[str, PreviousNodeOutput] = {}
         self.workflow_memory = WorkflowMemory(workflow_id=self.workflow.get("workflow_id"))
 
@@ -48,7 +53,12 @@ class WorkflowExecutor:
         queue: List[str] = [node_id for node_id, degree in in_degree.items() if degree == 0]
 
         import json
-        await self.manager.broadcast(json.dumps({"type": "workflow_started", "workflow_id": self.workflow.get('workflow_id'), "message": "Workflow execution started"}))
+        await self.manager.broadcast(json.dumps({
+            "type": "workflow_started",
+            "workflow_id": self.workflow.get('workflow_id'),
+            "execution_id": self.execution_id,
+            "message": "Workflow execution started"
+        }))
 
         while queue:
             node_id = queue.pop(0)
@@ -84,6 +94,7 @@ class WorkflowExecutor:
                 await self.manager.broadcast(json.dumps({
                     "type": "node_executed",
                     "node_id": node_id,
+                    "execution_id": self.execution_id,
                     "result": str(prev_out.data),
                     "message": "Node executed successfully"
                 }))
@@ -94,10 +105,52 @@ class WorkflowExecutor:
                         queue.append(neighbor_id)
 
             except Exception as e:
-                await self.manager.broadcast(json.dumps({"type": "execution_error", "node_id": node_id, "error": str(e), "message": "Error executing node"}))
+                await self.manager.broadcast(json.dumps({
+                    "type": "execution_error",
+                    "node_id": node_id,
+                    "execution_id": self.execution_id,
+                    "error": str(e),
+                    "message": "Error executing node"
+                }))
+                # persist failure
+                await self._persist_status(status="failed", error=str(e))
                 return
 
-        await self.manager.broadcast(json.dumps({"type": "workflow_finished", "workflow_id": self.workflow.get('workflow_id'), "message": "Workflow execution finished"}))
+        await self.manager.broadcast(json.dumps({
+            "type": "workflow_finished",
+            "workflow_id": self.workflow.get('workflow_id'),
+            "execution_id": self.execution_id,
+            "message": "Workflow execution finished"
+        }))
+        # persist success
+        summary = {nid: getattr(out, 'data', None) for nid, out in self.node_results.items()}
+        await self._persist_status(status="completed", results=summary)
+
+    async def _persist_status(self, status: str, results: Optional[dict] = None, error: Optional[str] = None) -> None:
+        if not self.db_session or not self.execution_id:
+            return
+        try:
+            exe_id = self.execution_id
+            if isinstance(exe_id, str):
+                try:
+                    exe_id = uuid.UUID(exe_id)
+                except Exception:
+                    return
+            exe = await self.db_session.get(WorkflowExecution, exe_id)
+            if not exe:
+                return
+            exe.status = status
+            if results is not None:
+                exe.results = results
+            if error is not None:
+                exe.error_message = error
+            if status in ("failed", "completed"):
+                from datetime import datetime as _dt
+                exe.completed_at = _dt.utcnow()
+            await self.db_session.commit()
+        except Exception:
+            # Don't crash execution if DB update fails
+            pass
 
     def get_input_for_node(self, node_id: str, connections: List[Dict[str, str]]) -> List[PreviousNodeOutput]:
         input_data: List[PreviousNodeOutput] = []

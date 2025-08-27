@@ -190,6 +190,7 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
   aria-label="Zoomable and pannable workflow canvas"
   bind:this={canvasElement}
   tabindex="0"
+  style={`--scale: ${scale}`}
   on:keydown={handleKeyDown}
   on:mousedown={handleMouseDown}
   on:mousemove={handleMouseMove}
@@ -204,10 +205,14 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
     {@const fromNode = nodes.get(connection.from)}
     {@const toNode = nodes.get(connection.to)}
     {#if fromNode && toNode}
-      {@const x1 = fromNode.position.x + 160}
-      {@const y1 = fromNode.position.y + 44}
+      {@const fromW = fromNode.type === 'input' ? 200 : 160}
+      {@const fromH = fromNode.type === 'input' ? 120 : 88}
+      {@const outOff = fromNode.type === 'input' ? 28 : 0}
+      {@const toH = toNode.type === 'input' ? 120 : 88}
+      {@const x1 = fromNode.position.x + fromW + outOff}
+      {@const y1 = fromNode.position.y + fromH / 2}
       {@const x2 = toNode.position.x}
-      {@const y2 = toNode.position.y + 44}
+      {@const y2 = toNode.position.y + toH / 2}
       {@const dx = Math.max(40, Math.abs(x2 - x1) * 0.35)}
       <path class="edge" d={`M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`} />
     {/if}
@@ -273,12 +278,12 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
 
 .edge {
   fill: none;
-  stroke: rgba(255,255,255,0.35);
+  stroke: rgba(33,150,243,0.6); /* blue data flow */
   stroke-width: 2;
   filter: url(#glow);
   transition: stroke-width 160ms ease, stroke 160ms ease;
 }
-.edge:hover { stroke-width: 3.5; stroke: var(--accent); }
+.edge:hover { stroke-width: 3.2; stroke: rgba(33,150,243,0.85); }
 
 /* Controls and minimap styles removed */
 </style>

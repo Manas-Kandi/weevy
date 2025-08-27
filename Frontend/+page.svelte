@@ -109,7 +109,7 @@ onMount(() => {
     y: 2400 + Math.random() * 100 
    },
    data: {
-    label: nodeTypes[event.detail.type as keyof typeof nodeTypes],
+    label: (event.detail.type === 'input') ? '' : nodeTypes[event.detail.type as keyof typeof nodeTypes],
     configuration: event.detail.type === 'tool' 
       ? { tool: 'email', action: 'draft', params: { to: ['user@example.com'], subject: 'Hello' }, mock: true }
       : {}
@@ -137,7 +137,7 @@ onMount(() => {
    type: event.detail.type as any,
    position: event.detail.position,
    data: {
-    label: nodeTypes[event.detail.type as keyof typeof nodeTypes],
+    label: (event.detail.type === 'input') ? '' : nodeTypes[event.detail.type as keyof typeof nodeTypes],
     configuration: event.detail.type === 'tool' 
       ? { tool: 'email', action: 'draft', params: { to: ['user@example.com'], subject: 'Hello' }, mock: true }
       : {}
