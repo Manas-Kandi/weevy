@@ -22,6 +22,7 @@
  let dragStartY = 0;
  let canvasStartX = 0;
  let canvasStartY = 0;
+ let isAnimating = false;
 
  let draggedNodeId: string | null = null;
  let initialNodePosition: { x: number; y: number } = { x: 0, y: 0 };
@@ -31,8 +32,9 @@
  // Connection state
  let isConnecting = false;
  let connectionStart: string | null = null;
+ let connectionPreview: { startX: number; startY: number; endX: number; endY: number } | null = null;
 
-function typeColorVar(t: string): string {
+ function typeColorVar(t: string): string {
   switch (t) {
     case 'brain': return 'var(--acc-brain)';
     case 'input': return 'var(--acc-input)';
@@ -56,12 +58,17 @@ onMount(() => {
 
  function updateCanvasTransform() {
   if (canvasElement) {
+   // No transitions for instant, responsive feel
+   canvasElement.style.transition = 'none';
    canvasElement.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
   }
  }
 
  function handleMouseDown(e: MouseEvent) {
   if (e.target === canvasElement) {
+   // Clear node selection when clicking canvas
+   selectedNodeId = null;
+   
    isDraggingCanvas = true;
    dragStartX = e.clientX;
    dragStartY = e.clientY;
@@ -74,6 +81,7 @@ onMount(() => {
   if (isDraggingCanvas) {
    const deltaX = e.clientX - dragStartX;
    const deltaY = e.clientY - dragStartY;
+   
    offsetX = canvasStartX + deltaX;
    offsetY = canvasStartY + deltaY;
    updateCanvasTransform();
@@ -86,12 +94,25 @@ onMount(() => {
     node.position.y = initialNodePosition.y + dy / scale;
     nodes = nodes; // Trigger reactivity
    }
+  } else if (isConnecting && connectionPreview) {
+   // Update connection preview end position
+   const rect = canvasElement.getBoundingClientRect();
+   connectionPreview.endX = (e.clientX - rect.left - offsetX) / scale;
+   connectionPreview.endY = (e.clientY - rect.top - offsetY) / scale;
+   connectionPreview = { ...connectionPreview }; // Trigger reactivity
   }
 }
 
 function handleMouseUp() {
   isDraggingCanvas = false;
   draggedNodeId = null;
+  
+  // End connection if we're connecting
+  if (isConnecting) {
+   isConnecting = false;
+   connectionStart = null;
+   connectionPreview = null;
+  }
 }
 
  function handleDoubleClick(e: MouseEvent) {
@@ -106,40 +127,70 @@ function handleMouseUp() {
 
  function handleWheel(e: WheelEvent) {
   e.preventDefault();
-  const zoomIntensity = 0.1;
-  const containerRect = canvasElement.parentElement?.getBoundingClientRect();
   
+  const containerRect = canvasElement.parentElement?.getBoundingClientRect();
   if (!containerRect) return;
 
   const mouseX = e.clientX - containerRect.left;
   const mouseY = e.clientY - containerRect.top;
   
-  const canvasX = (mouseX - offsetX) / scale;
-  const canvasY = (mouseY - offsetY) / scale;
-  
-  const wheel = e.deltaY < 0 ? 1 : -1;
-  scale *= (1 + wheel * zoomIntensity);
-  scale = Math.min(Math.max(0.1, scale), 5);
-  
-  offsetX = mouseX - canvasX * scale;
-  offsetY = mouseY - canvasY * scale;
+  // Handle pinch-to-zoom (detected by ctrlKey on macOS)
+  if (e.ctrlKey) {
+   const canvasX = (mouseX - offsetX) / scale;
+   const canvasY = (mouseY - offsetY) / scale;
+   
+   // Natural zoom like macOS - responsive but smooth
+   const zoomSpeed = 0.01; // More responsive
+   const zoomFactor = 1 + (e.deltaY > 0 ? -zoomSpeed : zoomSpeed);
+   const newScale = scale * zoomFactor;
+   
+   scale = Math.min(Math.max(0.1, newScale), 5);
+   
+   offsetX = mouseX - canvasX * scale;
+   offsetY = mouseY - canvasY * scale;
+  } else {
+   // Two-finger scroll for panning
+   offsetX -= e.deltaX;
+   offsetY -= e.deltaY;
+  }
   
   updateCanvasTransform();
  }
 
  function handleKeyDown(e: KeyboardEvent) {
-  const panStep = 40;
+  const panStep = 50;
+  
   if (e.key === 'ArrowLeft') { offsetX += panStep; updateCanvasTransform(); e.preventDefault(); }
   else if (e.key === 'ArrowRight') { offsetX -= panStep; updateCanvasTransform(); e.preventDefault(); }
   else if (e.key === 'ArrowUp') { offsetY += panStep; updateCanvasTransform(); e.preventDefault(); }
   else if (e.key === 'ArrowDown') { offsetY -= panStep; updateCanvasTransform(); e.preventDefault(); }
-  else if (e.key === '+' || e.key === '=') { zoom(1.2); e.preventDefault(); }
-  else if (e.key === '-' || e.key === '_') { zoom(0.8); e.preventDefault(); }
+  else if (e.key === '+' || e.key === '=') { smoothZoom(1.2); e.preventDefault(); }
+  else if (e.key === '-' || e.key === '_') { smoothZoom(0.8); e.preventDefault(); }
  }
 
  function zoom(factor: number) {
   scale *= factor;
   scale = Math.min(Math.max(0.1, scale), 5);
+  updateCanvasTransform();
+ }
+
+ function smoothZoom(factor: number) {
+  const containerRect = canvasElement.parentElement?.getBoundingClientRect();
+  if (!containerRect) return;
+  
+  // Zoom towards center of viewport
+  const centerX = containerRect.width / 2;
+  const centerY = containerRect.height / 2;
+  
+  const canvasX = (centerX - offsetX) / scale;
+  const canvasY = (centerY - offsetY) / scale;
+  
+  scale *= factor;
+  scale = Math.min(Math.max(0.1, scale), 5);
+  
+  offsetX = centerX - canvasX * scale;
+  offsetY = centerY - canvasY * scale;
+  
   updateCanvasTransform();
  }
 
@@ -153,20 +204,51 @@ function handleMouseUp() {
   updateCanvasTransform();
  }
 
- function handleConnectionStart(nodeId: string) {
-  isConnecting = true;
-  connectionStart = nodeId;
-  console.log('🔗 Starting connection from:', nodeId);
+ function handleConnectionStart(event: CustomEvent<{ nodeId: string; port: string }>) {
+ const { nodeId, port } = event.detail;
+ isConnecting = true;
+ connectionStart = nodeId;
+ 
+ // Calculate start position for preview based on port
+ const node = nodes.get(nodeId);
+ if (node) {
+  const startX = port === 'output' ? node.position.x + 320 : node.position.x;
+  const startY = node.position.y + 120; // Center of node
+  
+  connectionPreview = {
+   startX,
+   startY,
+   endX: startX,
+   endY: startY
+  };
  }
+}
 
- function handleConnectionEnd(nodeId: string) {
-  if (isConnecting && connectionStart && connectionStart !== nodeId) {
-   dispatch('connectionCreate', { from: connectionStart, to: nodeId });
-   console.log('✅ Connection created:', connectionStart, '->', nodeId);
-  }
-  isConnecting = false;
-  connectionStart = null;
+function handleConnectionEnd(event: CustomEvent<{ nodeId: string; port: string }>) {
+ const { nodeId, port } = event.detail;
+ if (isConnecting && connectionStart && connectionStart !== nodeId && port === 'input') {
+  // Create connection from output to input
+  const connectionId = `${connectionStart}-${nodeId}`;
+  connections.set(connectionId, {
+   id: connectionId,
+   from: connectionStart,
+   to: nodeId
+  });
+  connections = connections; // Trigger reactivity
  }
+ isConnecting = false;
+ connectionStart = null;
+ connectionPreview = null;
+}
+
+function handleNodeDelete(event: CustomEvent<{ nodeId: string }>) {
+ const { nodeId } = event.detail;
+ nodes.delete(nodeId);
+ nodes = nodes; // Trigger reactivity
+ if (selectedNodeId === nodeId) {
+  selectedNodeId = null;
+ }
+}
 
 function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEvent }>) {
  const { nodeId, event: mouseEvent } = event.detail;
@@ -218,10 +300,10 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
     {@const fromNode = nodes.get(connection.from)}
     {@const toNode = nodes.get(connection.to)}
     {#if fromNode && toNode}
-      {@const fromW = fromNode.type === 'input' ? 200 : 160}
-      {@const fromH = fromNode.type === 'input' ? 120 : 88}
-      {@const outOff = fromNode.type === 'input' ? 28 : 0}
-      {@const toH = toNode.type === 'input' ? 120 : 88}
+      {@const fromW = 320}
+      {@const fromH = 240}
+      {@const outOff = 0}
+      {@const toH = 240}
       {@const x1 = fromNode.position.x + fromW + outOff}
       {@const y1 = fromNode.position.y + fromH / 2}
       {@const x2 = toNode.position.x}
@@ -230,6 +312,9 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
       <path class="edge" style={`--edge-color: ${typeColorVar(fromNode.type)}`} d={`M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`} />
     {/if}
    {/each}
+   {#if connectionPreview}
+    <path class="edge preview" stroke="#3B82F6" stroke-width="3" stroke-dasharray="8,4" fill="none" opacity="0.7" d={`M ${connectionPreview.startX} ${connectionPreview.startY} C ${connectionPreview.startX + 100} ${connectionPreview.startY}, ${connectionPreview.endX - 100} ${connectionPreview.endY}, ${connectionPreview.endX} ${connectionPreview.endY}`} />
+   {/if}
    <defs>
     <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
       <feGaussianBlur stdDeviation="3" result="coloredBlur" />
@@ -246,9 +331,11 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
    <WorkflowNode
     {node}
     selected={selectedNodeId === node.id}
-    on:connectionStart={() => handleConnectionStart(node.id)}
-    on:connectionEnd={() => handleConnectionEnd(node.id)}
+    on:connectionStart={handleConnectionStart}
+    on:connectionEnd={handleConnectionEnd}
     on:nodestartdrag={handleNodeStartDrag}
+    on:delete={handleNodeDelete}
+    on:select={() => selectedNodeId = node.id}
    />
   {/each}
  </div>
@@ -287,8 +374,15 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
     radial-gradient(ellipse 1000px 600px at 80% 70%, rgba(139, 92, 246, 0.03) 0%, transparent 50%);
   background-size: 20px 20px, 100% 100%, 100% 100%, 100% 100%;
   cursor: grab;
+  will-change: transform;
  }
  .canvas:active { cursor: grabbing; }
+ 
+ /* Ultra-smooth trackpad interactions */
+ .canvas {
+  transform-origin: 0 0;
+  transition: none; /* No transitions for instant feedback */
+ }
 
 .connections-layer {
   position: absolute;

@@ -10,13 +10,17 @@
 
 	let focused = false;
 	let hovering = false;
+	let showInputPort = false;
+	let showOutputPort = false;
 	let titleEl: HTMLTextAreaElement;
 	let descEl: HTMLTextAreaElement;
 
 	const dispatch = createEventDispatcher<{
 		select: void;
-		connectionStart: void;
-		connectionEnd: void;
+		connectionStart: { nodeId: string; port: 'output' };
+		connectionEnd: { nodeId: string; port: 'input' };
+		nodestartdrag: { nodeId: string; event: MouseEvent };
+		delete: { nodeId: string };
 	}>();
 
 	const nodeIcons = {
@@ -97,14 +101,32 @@
 		dispatch('select');
 	}
 
-	function handleOutputPortClick(e: MouseEvent) {
+	function handleMouseDown(e: MouseEvent) {
+		// Only start drag if not clicking on input elements or connection ports
+		const target = e.target as Element;
+		if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.closest('.connection-port')) {
+			return;
+		}
+		
 		e.stopPropagation();
-		dispatch('connectionStart');
+		dispatch('nodestartdrag', { nodeId: node.id, event: e });
 	}
 
-	function handleInputPortClick(e: MouseEvent) {
+	function handleOutputPortMouseDown(e: MouseEvent) {
 		e.stopPropagation();
-		dispatch('connectionEnd');
+		dispatch('connectionStart', { nodeId: node.id, port: 'output' });
+	}
+
+	function handleInputPortMouseDown(e: MouseEvent) {
+		e.stopPropagation();
+		dispatch('connectionEnd', { nodeId: node.id, port: 'input' });
+	}
+
+	function handleKeyDown(e: KeyboardEvent) {
+		if (e.key === 'Delete' || e.key === 'Backspace') {
+			e.preventDefault();
+			dispatch('delete', { nodeId: node.id });
+		}
 	}
 
 	function handleTitleFocus() {
@@ -136,25 +158,37 @@
 	class:hovering
 	style="left: {node.position.x}px; top: {node.position.y}px; --accent-color: {nodeColors[node.type]};"
 	on:click={handleClick}
+	on:mousedown={handleMouseDown}
 	on:mouseenter={() => hovering = true}
 	on:mouseleave={() => hovering = false}
 	role="button"
 	aria-pressed={selected}
 	aria-label={`${nodeTypeLabels[node.type]} ${node.data.label}`}
 	tabindex="0"
-	on:keydown={(e) => handleKeyActivate(e, () => dispatch('select'))}
+	on:keydown={handleKeyDown}
 	in:scale={{ duration: 600, easing: elasticOut, start: 0.8 }}
 >
-	<!-- Input Port -->
+	<!-- Input Port Area - invisible hover zone -->
 	<div 
-		class="connection-port input-port"
-		on:click={handleInputPortClick}
-		title="Connect to this node"
+		class="port-hover-zone input-zone"
+		on:mouseenter={() => showInputPort = true}
+		on:mouseleave={() => showInputPort = false}
 		role="button"
-		aria-label="Connect to this node"
-		tabindex="0"
-		on:keydown={(e) => handleKeyActivate(e, () => dispatch('connectionEnd'))}
-	></div>
+		aria-label="Input connection area"
+		tabindex="-1"
+	>
+		{#if showInputPort || hovering}
+			<div 
+				class="connection-port input-port"
+				on:mousedown={handleInputPortMouseDown}
+				title="Connect to this node"
+				role="button"
+				aria-label="Connect to this node"
+				tabindex="0"
+				in:scale={{ duration: 200, start: 0.3 }}
+			></div>
+		{/if}
+	</div>
 
 	<!-- Floating animation icon -->
 	{#if hovering}
@@ -191,16 +225,27 @@
 		rows="3"
 	/>
 
-	<!-- Output Port -->
+	<!-- Output Port Area - invisible hover zone -->
 	<div 
-		class="connection-port output-port" 
-		on:click={handleOutputPortClick}
-		title="Create connection from this node"
+		class="port-hover-zone output-zone"
+		on:mouseenter={() => showOutputPort = true}
+		on:mouseleave={() => showOutputPort = false}
 		role="button"
-		aria-label="Create connection from this node"
-		tabindex="0"
-		on:keydown={(e) => handleKeyActivate(e, () => dispatch('connectionStart'))}
-	></div>
+		aria-label="Output connection area"
+		tabindex="-1"
+	>
+		{#if showOutputPort || hovering}
+			<div 
+				class="connection-port output-port"
+				on:mousedown={handleOutputPortMouseDown}
+				title="Create connection from this node"
+				role="button"
+				aria-label="Create connection from this node"
+				tabindex="0"
+				in:scale={{ duration: 200, start: 0.3 }}
+			></div>
+		{/if}
+	</div>
 </div>
 
 <style>
@@ -320,38 +365,56 @@
 		color: #D1D5DB;
 	}
 
+	.port-hover-zone {
+		position: absolute;
+		width: 60px;
+		height: 80px;
+		top: 50%;
+		transform: translateY(-50%);
+		z-index: 5;
+		/* Invisible hover zone */
+	}
+
+	.input-zone {
+		left: -50px;
+	}
+
+	.output-zone {
+		right: -50px;
+	}
+
 	.connection-port {
 		position: absolute;
-		width: 20px;
-		height: 20px;
+		width: 16px;
+		height: 16px;
 		border-radius: 50%;
 		cursor: pointer;
 		top: 50%;
 		transform: translateY(-50%);
-		z-index: 10;
+		z-index: 15;
 		box-shadow: 
-			0 4px 16px rgba(0, 0, 0, 0.12),
-			0 0 0 3px rgba(255, 255, 255, 0.95) inset;
+			0 4px 12px rgba(0, 0, 0, 0.15),
+			0 0 0 2px rgba(255, 255, 255, 1) inset;
 		backdrop-filter: blur(8px);
-		transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+		transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 	}
 
 	.input-port {
-		left: -10px;
+		left: 22px;
 		background: linear-gradient(135deg, #10B981 0%, #34D399 100%);
 	}
 
 	.output-port {
-		right: -10px;
+		right: 22px;
 		background: var(--accent-color);
 	}
 
 	.connection-port:hover {
-		transform: translateY(-50%) scale(1.3);
+		transform: translateY(-50%) scale(1.4);
 		box-shadow: 
-			0 8px 24px rgba(0, 0, 0, 0.2),
-			0 0 0 4px rgba(255, 255, 255, 1) inset,
-			0 0 20px rgba(255, 255, 255, 0.9);
+			0 6px 20px rgba(0, 0, 0, 0.25),
+			0 0 0 3px rgba(255, 255, 255, 1) inset,
+			0 0 16px color-mix(in oklch, var(--accent-color) 30%, transparent);
 	}
 
 	/* Node type specific hover animations */
@@ -371,5 +434,32 @@
 	@keyframes brainPulse {
 		0%, 100% { box-shadow: 0 16px 64px rgba(0, 0, 0, 0.08), 0 4px 16px rgba(0, 0, 0, 0.04); }
 		50% { box-shadow: 0 16px 64px rgba(139, 92, 246, 0.1), 0 4px 16px rgba(139, 92, 246, 0.06); }
+	}
+
+	/* Delete button area */
+	.pocket-note.selected::after {
+		content: '×';
+		position: absolute;
+		top: -8px;
+		right: -8px;
+		width: 24px;
+		height: 24px;
+		background: #EF4444;
+		color: white;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 16px;
+		font-weight: 600;
+		cursor: pointer;
+		box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+		transition: all 0.2s ease;
+		z-index: 20;
+	}
+
+	.pocket-note.selected:hover::after {
+		transform: scale(1.1);
+		box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
 	}
 </style>
