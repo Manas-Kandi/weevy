@@ -29,6 +29,17 @@ else
   echo "No Python venv found in config/. Proceeding without activation."
 fi
 
+# Ensure backend Python dependencies are installed
+if command -v python >/dev/null 2>&1; then
+  echo "Installing backend Python dependencies (Backend/requirements.txt)..."
+  python -m pip install --upgrade pip >/dev/null 2>&1 || true
+  python -m pip install -r Backend/requirements.txt || {
+    echo "Failed to install backend requirements. Check your internet connection and pip configuration." >&2
+  }
+else
+  echo "Python not found on PATH. Skipping backend dependency installation." >&2
+fi
+
 echo "Starting Weev development servers..."
 echo "Backend: http://localhost:8004"
 echo "Frontend: http://localhost:3000"
@@ -36,7 +47,9 @@ echo "Frontend: http://localhost:3000"
 # Run database migrations before starting backend
 if command -v alembic >/dev/null 2>&1; then
   echo "Running database migrations (alembic upgrade head)..."
-  alembic -c Backend/database/migrations/alembic.ini upgrade head || {
+  (
+    cd Backend/database/migrations && alembic upgrade head
+  ) || {
     echo "Alembic migration failed. Check DATABASE_URL and migration files." >&2
   }
 else

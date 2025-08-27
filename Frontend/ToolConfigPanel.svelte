@@ -78,22 +78,24 @@
 
 <style>
   .tool-config {
-    position: absolute;
-    right: 20px;
-    bottom: 20px;
-    width: 360px;
-    background: #202020;
-    border: 1px solid #303030;
-    border-radius: 8px;
-    padding: 16px;
-    z-index: 12;
+    background: rgba(255,255,255,0.55);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    width: auto;
   }
-  h3 { margin: 0 0 12px 0; font-size: 16px; }
-  label { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
-  select, textarea { background: #282828; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 6px; padding: 8px; }
+  h3 { margin: 0 0 12px 0; font-size: 14px; font-weight: 600; }
+  label { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+  select, textarea {
+    background: rgba(255,255,255,0.6);
+    color: #0f172a;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px;
+  }
   textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; }
-  .checkbox { flex-direction: row; align-items: center; gap: 8px; }
-  input[type="checkbox"] { accent-color: #3B82F6; }
-  span { color: #cfcfcf; font-size: 12px; }
+  .checkbox { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+  input[type="checkbox"] { accent-color: var(--accent-primary); }
+  span { color: #334155; font-size: 12px; }
 </style>
 

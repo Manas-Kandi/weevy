@@ -45,18 +45,18 @@
     height: 100vh;
     background: var(--glass);
     border: 1px solid var(--border);
-    border-radius: 0;
+    border-radius: 16px;
     backdrop-filter: blur(16px) saturate(120%);
-    box-shadow: none;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.12);
     overflow: hidden;
     z-index: 20;
     display: flex;
     flex-direction: column;
   }
-  header { padding: 14px 16px; border-bottom: 1px solid var(--border); }
-  .title { font-weight: 600; letter-spacing: 0.2px; }
-  .content { padding: 12px 12px 16px; overflow-y: auto; }
-  .meta { padding: 8px 10px 12px; border: 1px solid var(--border); border-radius: 0; background: rgba(255,255,255,0.04); margin-bottom: 12px; }
+  header { padding: 14px 16px; border-bottom: 1px solid var(--border); backdrop-filter: blur(6px); }
+  .title { font-weight: 600; letter-spacing: 0.2px; font-size: 14px; }
+  .content { padding: 12px 12px 16px; overflow-y: auto; display: grid; gap: 12px; }
+  .meta { padding: 10px 12px 12px; border: 1px solid var(--border); border-radius: 12px; background: rgba(255,255,255,0.55); margin-bottom: 4px; }
   .label { font-weight: 600; }
   .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
   .placeholder { display: grid; gap: 6px; padding: 8px; }

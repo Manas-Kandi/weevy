@@ -112,17 +112,19 @@ class GeneralNodeLogic:
         # Initialize LLM provider with error handling
         try:
             api_key = os.environ.get('NVIDIA_API_KEY')
-            if not api_key:
-                raise ValueError("NVIDIA_API_KEY environment variable not set")
-            
-            self.llm_provider = OpenAI(
-                api_key=api_key,
-                base_url='https://integrate.api.nvidia.com/v1',
-            )
-            
+            if api_key:
+                self.llm_provider = OpenAI(
+                    api_key=api_key,
+                    base_url='https://integrate.api.nvidia.com/v1',
+                )
+            else:
+                # No local provider; expect LLMManager to be injected at runtime
+                self.llm_provider = None
+                self.logger.info("No local LLM provider configured; using LLMManager if available.")
         except Exception as e:
-            self.logger.error(f"Failed to initialize LLM provider: {str(e)}")
-            raise
+            # Do not crash here; LLMManager path may be used
+            self.logger.warning(f"LLM provider init skipped: {str(e)}")
+            self.llm_provider = None
         
         # Model selection based on execution mode
         self.model_config = self._get_model_config()
@@ -147,19 +149,19 @@ class GeneralNodeLogic:
         """Get model configuration based on execution mode"""
         configs = {
             NodeExecutionMode.PROTOTYPE: {
-                'model': 'moonshotai/kimi-k2-instruct',
+                'model': 'meta/llama-3.1-8b-instruct',
                 'temperature': 0.7,
                 'max_tokens': 2048,
                 'top_p': 0.9
             },
             NodeExecutionMode.PRODUCTION: {
-                'model': 'moonshotai/kimi-k2-instruct',
+                'model': 'meta/llama-3.1-8b-instruct',
                 'temperature': 0.6,
                 'max_tokens': 4096,
                 'top_p': 0.9
             },
             NodeExecutionMode.DEBUG: {
-                'model': 'moonshotai/kimi-k2-instruct',
+                'model': 'meta/llama-3.1-8b-instruct',
                 'temperature': 0.5,
                 'max_tokens': 1024,
                 'top_p': 0.8
@@ -253,46 +255,97 @@ Execute your node function now:
         try:
             # Merge user config with model defaults
             model_params = {**self.model_config, **user_config}
-            
-            completion = self.llm_provider.chat.completions.create(
-                model=model_params['model'],
-                messages=[{"role": "user", "content": prompt}],
-                temperature=model_params.get('temperature', 0.6),
-                top_p=model_params.get('top_p', 0.9),
-                max_tokens=model_params.get('max_tokens', 4096),
-                stream=True
-            )
-            
-            full_response = ""
-            chunk_count = 0
-            
-            for chunk in completion:
-                if chunk.choices[0].delta.content:
-                    content = chunk.choices[0].delta.content
-                    full_response += content
-                    chunk_count += 1
-                    
-                    # Enhanced streaming with callbacks
+
+            # Prefer centralized LLMManager if available
+            llm_manager = getattr(self, "llm_manager", None)
+            db_session = getattr(self, "db_session", None)
+
+            if llm_manager and db_session:
+                # Prepare messages for chat API
+                messages = [{"role": "user", "content": prompt}]
+
+                # Coerce IDs to UUID if possible
+                exec_id = getattr(self, "execution_id", None)
+                user_id = getattr(self, "user_id", None)
+                try:
+                    if isinstance(exec_id, str):
+                        exec_id = uuid.UUID(exec_id)
+                except Exception:
+                    exec_id = None
+                try:
+                    if isinstance(user_id, str):
+                        user_id = uuid.UUID(user_id)
+                except Exception:
+                    user_id = None
+
+                # Call manager (providers currently return full result; simulate streaming)
+                result = await llm_manager.generate(
+                    db_session,
+                    user_id=user_id,
+                    model=model_params['model'],
+                    messages=messages,
+                    stream=True,
+                    temperature=model_params.get('temperature'),
+                    max_tokens=model_params.get('max_tokens'),
+                    extra=user_config,
+                    execution_id=exec_id,
+                )
+
+                content = result.content or ""
+                if not content:
+                    return ""
+
+                full_response = ""
+                # Simulated streaming in chunks
+                chunk_size = 200
+                for i in range(0, len(content), chunk_size):
+                    piece = content[i:i+chunk_size]
+                    full_response += piece
                     if streaming_callback:
-                        streaming_callback(content)
+                        try:
+                            streaming_callback(piece)
+                        except Exception:
+                            pass
                     else:
-                        await self._stream_to_frontend(content)
-                    
-                    # Debug mode: log streaming progress
-                    if self.execution_mode == NodeExecutionMode.DEBUG and chunk_count % 10 == 0:
-                        self.logger.debug(f"Streamed {chunk_count} chunks, {len(full_response)} chars")
-            
-            self.logger.info(f"Streaming completed: {chunk_count} chunks, {len(full_response)} characters")
-            return full_response
-            
+                        await self._stream_to_frontend(piece)
+                self.logger.info(f"LLMManager response streamed (simulated): {len(full_response)} chars")
+                return full_response
+
+            # Fallback to local provider streaming if manager not available
+            if self.llm_provider:
+                completion = self.llm_provider.chat.completions.create(
+                    model=model_params['model'],
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=model_params.get('temperature', 0.6),
+                    top_p=model_params.get('top_p', 0.9),
+                    max_tokens=model_params.get('max_tokens', 4096),
+                    stream=True
+                )
+
+                full_response = ""
+                chunk_count = 0
+                for chunk in completion:
+                    if chunk.choices[0].delta.content:
+                        piece = chunk.choices[0].delta.content
+                        full_response += piece
+                        chunk_count += 1
+                        if streaming_callback:
+                            streaming_callback(piece)
+                        else:
+                            await self._stream_to_frontend(piece)
+                        if self.execution_mode == NodeExecutionMode.DEBUG and chunk_count % 10 == 0:
+                            self.logger.debug(f"Streamed {chunk_count} chunks, {len(full_response)} chars")
+                self.logger.info(f"Streaming completed: {chunk_count} chunks, {len(full_response)} characters")
+                return full_response
+
+            # If no provider is available at all
+            return "Error: No LLM provider available (LLMManager or local provider)."
+
         except Exception as e:
             self.logger.error(f"Error in LLM execution: {str(e)}")
-            
-            # Intelligent error recovery
             if "rate_limit" in str(e).lower():
                 await asyncio.sleep(1)
                 return await self._execute_with_intelligent_streaming(prompt, user_config, streaming_callback)
-            
             return f"Error: {str(e)}"
     
     async def _format_intelligent_output(

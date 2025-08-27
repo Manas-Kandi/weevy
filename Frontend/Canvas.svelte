@@ -32,6 +32,17 @@
  let isConnecting = false;
  let connectionStart: string | null = null;
 
+function typeColorVar(t: string): string {
+  switch (t) {
+    case 'brain': return 'var(--acc-brain)';
+    case 'input': return 'var(--acc-input)';
+    case 'output': return 'var(--acc-output)';
+    case 'knowledge': return 'var(--acc-knowledge)';
+    case 'tool': return 'var(--acc-tool)';
+    default: return 'var(--accent-primary)';
+  }
+}
+
 onMount(() => {
   const containerRect = canvasElement.parentElement?.getBoundingClientRect();
   if (containerRect) {
@@ -184,6 +195,8 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
  role="application"
  aria-label="Workflow canvas container"
 >
+ <!-- svelte-ignore a11y-no-noninteractive-tabindex -->
+ <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
  <div 
   class="canvas"
   role="application"
@@ -214,7 +227,7 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
       {@const x2 = toNode.position.x}
       {@const y2 = toNode.position.y + toH / 2}
       {@const dx = Math.max(40, Math.abs(x2 - x1) * 0.35)}
-      <path class="edge" d={`M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`} />
+      <path class="edge" style={`--edge-color: ${typeColorVar(fromNode.type)}`} d={`M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`} />
     {/if}
    {/each}
    <defs>
@@ -248,7 +261,7 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
   position: relative;
   width: 100%;
   height: 100vh;
-  background-color: #181818;
+  background: transparent;
   overflow: hidden;
   cursor: grab;
  }
@@ -259,12 +272,23 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
 
  .canvas {
   position: absolute;
+  top: 0;
+  left: 0;
   width: 5000px;
   height: 5000px;
-  background-color: #181818;
-  transform-origin: 0 0;
-  user-select: none;
+  background: var(--canvas-bg);
+  background-image: 
+    /* Dot grid pattern */
+    radial-gradient(circle at 1px 1px, var(--canvas-grid) 1px, transparent 0),
+    /* Ambient lighting - darker edges, lighter center */
+    radial-gradient(ellipse 2000px 1500px at 50% 45%, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.1) 40%, rgba(0, 0, 0, 0.02) 100%),
+    /* Subtle color zones for visual interest */
+    radial-gradient(ellipse 1200px 800px at 20% 30%, rgba(59, 130, 246, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse 1000px 600px at 80% 70%, rgba(139, 92, 246, 0.03) 0%, transparent 50%);
+  background-size: 20px 20px, 100% 100%, 100% 100%, 100% 100%;
+  cursor: grab;
  }
+ .canvas:active { cursor: grabbing; }
 
 .connections-layer {
   position: absolute;
@@ -278,12 +302,61 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
 
 .edge {
   fill: none;
-  stroke: rgba(33,150,243,0.6); /* blue data flow */
-  stroke-width: 2;
-  filter: url(#glow);
-  transition: stroke-width 160ms ease, stroke 160ms ease;
+  stroke-width: 3;
+  stroke: var(--acc-input);
+  stroke-opacity: 0.8;
+  stroke-linecap: round;
+  pointer-events: none;
+  filter: 
+    drop-shadow(0 0 6px rgba(96, 165, 250, 0.4))
+    drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+  transition: all 0.3s var(--ease-smooth);
 }
-.edge:hover { stroke-width: 3.2; stroke: rgba(33,150,243,0.85); }
+
+.edge.brain { 
+  stroke: var(--acc-brain); 
+  filter: 
+    drop-shadow(0 0 6px rgba(167, 139, 250, 0.4))
+    drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.edge.output { 
+  stroke: var(--acc-output);
+  filter: 
+    drop-shadow(0 0 6px rgba(74, 222, 128, 0.4))
+    drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.edge.knowledge { 
+  stroke: var(--acc-knowledge);
+  filter: 
+    drop-shadow(0 0 6px rgba(129, 140, 248, 0.4))
+    drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.edge.tool { 
+  stroke: var(--acc-tool);
+  filter: 
+    drop-shadow(0 0 6px rgba(251, 191, 36, 0.4))
+    drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+/* Enhanced glow on hover (when parent node is hovered) */
+.workflow-node:hover ~ .connections-layer .edge,
+.edge:hover {
+  stroke-width: 4;
+  filter: 
+    drop-shadow(0 0 12px rgba(var(--glow-color, 96, 165, 250), 0.6))
+    drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15));
+}
+
+@keyframes flow {
+  to { stroke-dashoffset: -320; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edge { animation: none; }
+}
 
 /* Controls and minimap styles removed */
 </style>

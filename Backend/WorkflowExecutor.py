@@ -30,11 +30,21 @@ NODE_CLASSES = {
 }
 
 class WorkflowExecutor:
-    def __init__(self, workflow: Dict[str, Any], manager, execution_id: Optional[str] = None, db_session: Optional[AsyncSession] = None):
+    def __init__(
+        self,
+        workflow: Dict[str, Any],
+        manager,
+        execution_id: Optional[str] = None,
+        db_session: Optional[AsyncSession] = None,
+        llm_manager: Any | None = None,
+        user_id: Optional[str] = None,
+    ):
         self.workflow = workflow
         self.manager = manager
         self.execution_id = execution_id
         self.db_session = db_session
+        self.llm_manager = llm_manager
+        self.user_id = user_id
         self.node_results: Dict[str, PreviousNodeOutput] = {}
         self.workflow_memory = WorkflowMemory(workflow_id=self.workflow.get("workflow_id"))
 
@@ -73,6 +83,14 @@ class WorkflowExecutor:
 
                 node_class = NODE_CLASSES[node_type]
                 node_instance = node_class(node_id, f"{node_type}_{node_id}")
+                # Inject runtime dependencies if supported
+                try:
+                    setattr(node_instance, "llm_manager", self.llm_manager)
+                    setattr(node_instance, "db_session", self.db_session)
+                    setattr(node_instance, "execution_id", self.execution_id)
+                    setattr(node_instance, "user_id", self.user_id)
+                except Exception:
+                    pass
 
                 inputs = NodeInputs(
                     system_rules=node_data.get("system_rules", ""),

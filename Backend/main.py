@@ -24,6 +24,9 @@ from database.models import Project, WorkflowNode, NodeConnection, WorkflowExecu
 from api.projects import router as projects_router
 from api.nodes import router as nodes_router
 from api.executions import router as executions_router
+from api.billing import router as billing_router
+from llm.manager import LLMManager
+from llm.providers import OpenAIProvider, AnthropicProvider, GoogleProvider, NvidiaProvider
 
 # Load environment variables
 load_dotenv()
@@ -112,11 +115,20 @@ async def health_check_db():
 app.include_router(projects_router)
 app.include_router(nodes_router)
 app.include_router(executions_router)
+app.include_router(billing_router)
 
 # Lifespan events
 @app.on_event("startup")
 async def on_startup():
     await init_db()
+    # Initialize multi-provider LLM manager and attach to app state
+    providers = [
+        NvidiaProvider(),
+        OpenAIProvider(),
+        AnthropicProvider(),
+        GoogleProvider(),
+    ]
+    app.state.llm_manager = LLMManager(providers)
 
 @app.on_event("shutdown")
 async def on_shutdown():

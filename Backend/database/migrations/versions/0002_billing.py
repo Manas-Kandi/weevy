@@ -7,9 +7,11 @@ Create Date: 2025-08-27 00:00:00.000000
 """
 from __future__ import annotations
 
+import uuid
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.sql import table, column
 
 # revision identifiers, used by Alembic.
 revision = '0002_billing'
@@ -73,6 +75,62 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('NOW()'), nullable=False),
     )
     op.create_index('ux_model_provider_key', 'model_providers', ['provider', 'model'], unique=True)
+
+    # Seed a few default providers/models for immediate use
+    providers_table = table(
+        'model_providers',
+        column('id', postgresql.UUID(as_uuid=True)),
+        column('provider', sa.String(length=64)),
+        column('model', sa.String(length=128)),
+        column('display_name', sa.String(length=255)),
+        column('is_free_tier', sa.Boolean()),
+        column('is_active', sa.Boolean()),
+    )
+    op.bulk_insert(
+        providers_table,
+        [
+            {
+                'id': uuid.uuid4(),
+                'provider': 'nvidia',
+                'model': 'meta/llama-3.1-8b-instruct',
+                'display_name': 'Llama 3.1 8B Instruct',
+                'is_free_tier': True,
+                'is_active': True,
+            },
+            {
+                'id': uuid.uuid4(),
+                'provider': 'nvidia',
+                'model': 'mistralai/mixtral-8x7b-instruct-v0.1',
+                'display_name': 'Mixtral 8x7B Instruct',
+                'is_free_tier': True,
+                'is_active': True,
+            },
+            {
+                'id': uuid.uuid4(),
+                'provider': 'openai',
+                'model': 'gpt-4o-mini',
+                'display_name': 'GPT-4o mini',
+                'is_free_tier': False,
+                'is_active': True,
+            },
+            {
+                'id': uuid.uuid4(),
+                'provider': 'anthropic',
+                'model': 'claude-3-5-sonnet-20240620',
+                'display_name': 'Claude 3.5 Sonnet',
+                'is_free_tier': False,
+                'is_active': True,
+            },
+            {
+                'id': uuid.uuid4(),
+                'provider': 'google',
+                'model': 'gemini-1.5-flash',
+                'display_name': 'Gemini 1.5 Flash',
+                'is_free_tier': True,
+                'is_active': True,
+            },
+        ],
+    )
 
 
 def downgrade() -> None:

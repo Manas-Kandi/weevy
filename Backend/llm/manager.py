@@ -57,7 +57,7 @@ class LLMManager:
                     output_token_cost_usd=r.output_token_cost_usd,
                     endpoint_url=r.endpoint_url,
                     pricing_config=r.pricing_config,
-                    metadata=r.metadata,
+                    metadata=r.meta,
                 )
             )
         return infos
@@ -80,7 +80,7 @@ class LLMManager:
             output_token_cost_usd=r.output_token_cost_usd,
             endpoint_url=r.endpoint_url,
             pricing_config=r.pricing_config,
-            metadata=r.metadata,
+            metadata=r.meta,
         )
 
     async def _ensure_subscription(self, db: AsyncSession, user_id: uuid.UUID) -> UserSubscription:

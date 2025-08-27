@@ -46,7 +46,8 @@
   }
 </script>
 
-<div class="input-node" on:mousedown|stopPropagation>
+<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+<div class="input-node" on:mousedown|stopPropagation role="group" aria-label="Input node editor">
   <div class="header">
     <div class="meta"><ArrowRightCircle size={12} /> <span>Input Node</span></div>
     <input
@@ -100,64 +101,69 @@
   .input-node {
     width: 200px;
     min-height: 120px;
-    border-radius: 16px; /* generous */
-    background: #000;
-    color: #e6e8eb;
-    border: none; /* no border, floating via shadow */
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    border-radius: 20px;
+    background: var(--node-glass);
+    color: var(--text);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-node);
+    backdrop-filter: blur(20px) saturate(180%);
     display: grid;
     grid-template-rows: auto 1fr;
     overflow: hidden;
+    transition: all 0.3s var(--ease-spring);
   }
-  .input-node:hover { box-shadow: 0 6px 18px rgba(0,0,0,0.18); transform: scale(1.01); }
+  .input-node:hover { 
+    box-shadow: var(--shadow-float), var(--glow-subtle);
+    transform: translateY(-2px) scale(1.01);
+  }
 
   .header { display: grid; gap: 8px; padding: 16px 16px 10px 16px; }
-  .meta { display: inline-flex; align-items: center; gap: 6px; color: #67E8F9; font-size: 12px; opacity: 0.9; }
+  .meta { display: inline-flex; align-items: center; gap: 6px; color: var(--acc-input); font-size: 12px; opacity: 0.9; }
 
   .title {
     background: transparent;
     border: none;
     outline: none;
-    color: #eaf2ff;
+    color: #111827;
     font-weight: 700;
     font-size: calc(18px * clamp(0.8, 1 / var(--scale, 1), 1.15));
   }
-  .title::placeholder { color: rgba(255,255,255,0.35); }
+  .title::placeholder { color: var(--muted); }
 
   .content { padding: 0 16px 16px 16px; display: grid; gap: 12px; }
 
-  .prompt { font-size: 12px; color: #67E8F9; letter-spacing: 0.2px; }
-  .mt { margin-top: 4px; }
+  .prompt { font-size: 12px; color: var(--acc-input); letter-spacing: 0.2px; }
+  /* .mt helper removed (unused) */
 
   .note {
     width: 100%;
     min-height: 24px;
     resize: none;
     overflow: hidden;
-    background: #0b0b0b;
-    border: none;
+    background: rgba(255,255,255,0.6);
+    border: 1px solid var(--border);
     border-radius: 12px;
-    color: #bfbfbf; /* light gray for description */
+    color: #334155; /* slate-700 */
     padding: 10px 12px;
     font-size: calc(14px * clamp(0.85, 1 / var(--scale, 1), 1.15));
     line-height: 1.35;
     outline: none;
   }
-  .note::placeholder { color: #888; }
+  .note::placeholder { color: var(--muted); }
 
-  .expand { background: transparent; border: none; color: #67E8F9; font-size: 12px; text-align: left; padding: 0; cursor: pointer; }
+  .expand { background: transparent; border: none; color: var(--acc-input); font-size: 12px; text-align: left; padding: 0; cursor: pointer; }
   .expand:hover { text-decoration: underline; }
 
   .cases { display: grid; gap: 12px; }
-  .cases-title { font-size: 12px; color: rgba(217,231,255,0.7); font-weight: 600; }
+  .cases-title { font-size: 12px; color: #334155; font-weight: 600; }
   ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
-  li { color: #e6e8eb; }
-  .case { background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02); }
-  .case:hover { box-shadow: 0 0 0 1px rgba(103,232,249,0.1), 0 8px 20px rgba(0,0,0,0.25); }
-  .case-header { font-weight: 600; font-size: calc(16px * clamp(0.85, 1 / var(--scale, 1), 1.05)); color: #ffffff; letter-spacing: 0.1px; }
-  .case-body { color: #cfd3da; font-size: calc(14px * clamp(0.9, 1 / var(--scale, 1), 1.05)); }
-  .from { color: rgba(200,205,215,0.75); font-size: 12px; }
-  .level, .text, .fromInput { background: transparent; border: none; outline: none; color: inherit; font-size: inherit; font-weight: inherit; }
-  .add { background: transparent; border: none; color: #9CC9FF; font-size: 12px; text-align: left; padding: 0; cursor: pointer; }
+  li { color: #0f172a; }
+  .case { background: rgba(255,255,255,0.55); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08); }
+  .case:hover { box-shadow: 0 0 0 1px color-mix(in oklab, var(--acc-input) 20%, transparent), 0 8px 18px rgba(0,0,0,0.10); }
+  .case-header { font-weight: 600; font-size: calc(16px * clamp(0.85, 1 / var(--scale, 1), 1.05)); color: #111827; letter-spacing: 0.1px; }
+  .case-body { color: #334155; font-size: calc(14px * clamp(0.9, 1 / var(--scale, 1), 1.05)); }
+  .from { color: #475569; font-size: 12px; }
+  .text, .fromInput { background: transparent; border: none; outline: none; color: inherit; font-size: inherit; font-weight: inherit; }
+  .add { background: transparent; border: none; color: var(--acc-input); font-size: 12px; text-align: left; padding: 0; cursor: pointer; }
   .add:hover { text-decoration: underline; }
 </style>

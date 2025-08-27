@@ -11,6 +11,7 @@ from typing import Dict, List, Any, Optional, AsyncGenerator, Callable
 from datetime import datetime
 from openai import OpenAI
 import asyncio
+import uuid
 
 from GeneralNodeLogic import (
     GeneralNodeLogic, 
@@ -51,18 +52,18 @@ class BrainNode(GeneralNodeLogic):
         # Set up specific NVIDIA API client for BrainNode
         try:
             api_key = os.environ.get('NVIDIA_API_KEY')
-            if not api_key:
-                raise ValueError("NVIDIA_API_KEY environment variable not set")
-                
-            self.brain_llm = OpenAI(
-                api_key=api_key,
-                base_url='https://integrate.api.nvidia.com/v1',
-            )
-            self.logger.info("BrainNode NVIDIA API client initialized successfully")
-            
+            if api_key:
+                self.brain_llm = OpenAI(
+                    api_key=api_key,
+                    base_url='https://integrate.api.nvidia.com/v1',
+                )
+                self.logger.info("BrainNode NVIDIA API client initialized successfully")
+            else:
+                self.brain_llm = None
+                self.logger.info("No NVIDIA_API_KEY set; BrainNode will use LLMManager if available.")
         except Exception as e:
-            self.logger.error(f"Failed to initialize BrainNode NVIDIA API client: {str(e)}")
-            raise
+            self.logger.warning(f"BrainNode local client init skipped: {str(e)}")
+            self.brain_llm = None
     
     async def execute(
         self,
@@ -385,97 +386,194 @@ class BrainNode(GeneralNodeLogic):
         try:
             system_message = "You are the Brain Node responsible for reasoning and decision-making in an AI workflow system. Provide clear, logical reasoning and decisions."
             
-            # Use the BrainNode-specific client with streaming
-            completion = self.brain_llm.chat.completions.create(
-                model=model_params['model'],
-                messages=[{"role": "system", "content": system_message}, 
-                        {"role": "user", "content": prompt}],
-                temperature=model_params.get('temperature', 0.4),
-                top_p=model_params.get('top_p', 0.85),
-                max_tokens=model_params.get('max_tokens', 4096),
-                stream=True  # Enable streaming
-            )
-            
-            full_response = ""
-            reasoning_buffer = ""
-            decision_buffer = ""
-            next_node_buffer = ""
-            parameters_buffer = ""
-            current_section = None
-            streaming_enabled = streaming_callback is not None
-            
-            # Track streaming metrics
-            chunk_count = 0
-            section_transitions = 0
-            start_time = datetime.now()
-            
-            # Process streaming chunks with error handling
-            for chunk in completion:
+            # Prefer centralized LLMManager if available
+            llm_manager = getattr(self, "llm_manager", None)
+            db_session = getattr(self, "db_session", None)
+            if llm_manager and db_session:
+                messages = [
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": prompt},
+                ]
+                exec_id = getattr(self, "execution_id", None)
+                user_id = getattr(self, "user_id", None)
                 try:
-                    delta_content = chunk.choices[0].delta.content
-                    if delta_content:
-                        chunk_count += 1
-                        full_response += delta_content
-                        
-                        # Detect section transitions for structured output
-                        if "REASONING:" in delta_content and current_section is None:
-                            current_section = "reasoning"
-                            section_transitions += 1
-                        elif "DECISION:" in delta_content and (current_section == "reasoning" or current_section is None):
-                            current_section = "decision"
-                            section_transitions += 1
-                        elif "NEXT_NODE:" in delta_content and (current_section == "decision" or current_section is None):
-                            current_section = "next_node"
-                            section_transitions += 1
-                        elif "PARAMETERS:" in delta_content and (current_section == "next_node" or current_section is None):
-                            current_section = "parameters"
-                            section_transitions += 1
-                        
-                        # Buffer content by section for partial processing
-                        if current_section == "reasoning":
-                            reasoning_buffer += delta_content
-                        elif current_section == "decision":
-                            decision_buffer += delta_content
-                        elif current_section == "next_node":
-                            next_node_buffer += delta_content
-                        elif current_section == "parameters":
-                            parameters_buffer += delta_content
-                        
-                        # Stream the content to the client if a callback is provided
-                        if streaming_enabled:
-                            try:
-                                streaming_callback(delta_content)
-                            except Exception as callback_error:
-                                self.logger.warning(f"Streaming callback error: {str(callback_error)}")
-                                # Continue processing even if the callback fails
-                        else:
-                            # If no callback but in debug mode, print to console
-                            if self.execution_mode == NodeExecutionMode.DEBUG:
-                                print(delta_content, end='', flush=True)
-                                
-                        # Log progress in debug mode
-                        if chunk_count % 50 == 0 and self.execution_mode == NodeExecutionMode.DEBUG:
-                            self.logger.debug(f"Streamed {chunk_count} chunks, current section: {current_section}")
-                except Exception as chunk_error:
-                    self.logger.warning(f"Error processing chunk: {str(chunk_error)}")
-                    # Continue to the next chunk instead of failing the whole stream
-                    continue
-            
-            # Streaming complete - log metrics
-            duration = (datetime.now() - start_time).total_seconds()
-            self.logger.info(
-                f"Brain reasoning streaming complete: {len(full_response)} chars, "
-                f"{chunk_count} chunks, {section_transitions} sections in {duration:.2f}s"
-            )
-            
-            # Validate the response has the expected structure
-            if not full_response or "REASONING:" not in full_response:
-                self.logger.warning("Stream response may be incomplete or malformed")
-                if len(full_response) < 50:
-                    # If response is very short, likely an error occurred
-                    return await self._fallback_non_streaming_reasoning(prompt, model_params)
-            
-            return full_response
+                    if isinstance(exec_id, str):
+                        exec_id = uuid.UUID(exec_id)
+                except Exception:
+                    exec_id = None
+                try:
+                    if isinstance(user_id, str):
+                        user_id = uuid.UUID(user_id)
+                except Exception:
+                    user_id = None
+
+                result = await llm_manager.generate(
+                    db_session,
+                    user_id=user_id,
+                    model=model_params['model'],
+                    messages=messages,
+                    stream=True,
+                    temperature=model_params.get('temperature', 0.4),
+                    max_tokens=model_params.get('max_tokens', 4096),
+                    extra={},
+                    execution_id=exec_id,
+                )
+
+                content = (getattr(result, 'content', None) or "")
+                if not content:
+                    return ""
+
+                full_response = ""
+                reasoning_buffer = ""
+                decision_buffer = ""
+                next_node_buffer = ""
+                parameters_buffer = ""
+                current_section = None
+                streaming_enabled = streaming_callback is not None
+
+                chunk_count = 0
+                section_transitions = 0
+                start_time = datetime.now()
+
+                chunk_size = 200
+                for i in range(0, len(content), chunk_size):
+                    delta_content = content[i:i+chunk_size]
+                    try:
+                        if delta_content:
+                            chunk_count += 1
+                            full_response += delta_content
+                            if "REASONING:" in delta_content and current_section is None:
+                                current_section = "reasoning"
+                                section_transitions += 1
+                            elif "DECISION:" in delta_content and (current_section == "reasoning" or current_section is None):
+                                current_section = "decision"
+                                section_transitions += 1
+                            elif "NEXT_NODE:" in delta_content and (current_section == "decision" or current_section is None):
+                                current_section = "next_node"
+                                section_transitions += 1
+                            elif "PARAMETERS:" in delta_content and (current_section == "next_node" or current_section is None):
+                                current_section = "parameters"
+                                section_transitions += 1
+
+                            if current_section == "reasoning":
+                                reasoning_buffer += delta_content
+                            elif current_section == "decision":
+                                decision_buffer += delta_content
+                            elif current_section == "next_node":
+                                next_node_buffer += delta_content
+                            elif current_section == "parameters":
+                                parameters_buffer += delta_content
+
+                            if streaming_enabled:
+                                try:
+                                    streaming_callback(delta_content)
+                                except Exception as callback_error:
+                                    self.logger.warning(f"Streaming callback error: {str(callback_error)}")
+                            else:
+                                if self.execution_mode == NodeExecutionMode.DEBUG:
+                                    print(delta_content, end='', flush=True)
+
+                            if chunk_count % 50 == 0 and self.execution_mode == NodeExecutionMode.DEBUG:
+                                self.logger.debug(f"Streamed {chunk_count} chunks, current section: {current_section}")
+                    except Exception as chunk_error:
+                        self.logger.warning(f"Error processing chunk: {str(chunk_error)}")
+                        continue
+
+                duration = (datetime.now() - start_time).total_seconds()
+                self.logger.info(
+                    f"Brain reasoning streaming complete: {len(full_response)} chars, "
+                    f"{chunk_count} chunks, {section_transitions} sections in {duration:.2f}s"
+                )
+
+                if not full_response or "REASONING:" not in full_response:
+                    self.logger.warning("Stream response may be incomplete or malformed")
+                    if len(full_response) < 50:
+                        return await self._fallback_non_streaming_reasoning(prompt, model_params)
+
+                return full_response
+
+            # Fallback: use local NVIDIA client if available
+            if self.brain_llm:
+                completion = self.brain_llm.chat.completions.create(
+                    model=model_params['model'],
+                    messages=[{"role": "system", "content": system_message}, 
+                            {"role": "user", "content": prompt}],
+                    temperature=model_params.get('temperature', 0.4),
+                    top_p=model_params.get('top_p', 0.85),
+                    max_tokens=model_params.get('max_tokens', 4096),
+                    stream=True
+                )
+
+                full_response = ""
+                reasoning_buffer = ""
+                decision_buffer = ""
+                next_node_buffer = ""
+                parameters_buffer = ""
+                current_section = None
+                streaming_enabled = streaming_callback is not None
+
+                chunk_count = 0
+                section_transitions = 0
+                start_time = datetime.now()
+
+                for chunk in completion:
+                    try:
+                        delta_content = chunk.choices[0].delta.content
+                        if delta_content:
+                            chunk_count += 1
+                            full_response += delta_content
+                            if "REASONING:" in delta_content and current_section is None:
+                                current_section = "reasoning"
+                                section_transitions += 1
+                            elif "DECISION:" in delta_content and (current_section == "reasoning" or current_section is None):
+                                current_section = "decision"
+                                section_transitions += 1
+                            elif "NEXT_NODE:" in delta_content and (current_section == "decision" or current_section is None):
+                                current_section = "next_node"
+                                section_transitions += 1
+                            elif "PARAMETERS:" in delta_content and (current_section == "next_node" or current_section is None):
+                                current_section = "parameters"
+                                section_transitions += 1
+
+                            if current_section == "reasoning":
+                                reasoning_buffer += delta_content
+                            elif current_section == "decision":
+                                decision_buffer += delta_content
+                            elif current_section == "next_node":
+                                next_node_buffer += delta_content
+                            elif current_section == "parameters":
+                                parameters_buffer += delta_content
+
+                            if streaming_enabled:
+                                try:
+                                    streaming_callback(delta_content)
+                                except Exception as callback_error:
+                                    self.logger.warning(f"Streaming callback error: {str(callback_error)}")
+                            else:
+                                if self.execution_mode == NodeExecutionMode.DEBUG:
+                                    print(delta_content, end='', flush=True)
+
+                            if chunk_count % 50 == 0 and self.execution_mode == NodeExecutionMode.DEBUG:
+                                self.logger.debug(f"Streamed {chunk_count} chunks, current section: {current_section}")
+                    except Exception as chunk_error:
+                        self.logger.warning(f"Error processing chunk: {str(chunk_error)}")
+                        continue
+
+                duration = (datetime.now() - start_time).total_seconds()
+                self.logger.info(
+                    f"Brain reasoning streaming complete: {len(full_response)} chars, "
+                    f"{chunk_count} chunks, {section_transitions} sections in {duration:.2f}s"
+                )
+
+                if not full_response or "REASONING:" not in full_response:
+                    self.logger.warning("Stream response may be incomplete or malformed")
+                    if len(full_response) < 50:
+                        return await self._fallback_non_streaming_reasoning(prompt, model_params)
+
+                return full_response
+
+            # If neither LLMManager nor local client is available
+            return await self._fallback_non_streaming_reasoning(prompt, model_params)
         
         except Exception as e:
             self.logger.error(f"Error in streaming response: {str(e)}")
@@ -495,20 +593,60 @@ class BrainNode(GeneralNodeLogic):
             model_params = model_params.copy()
             model_params["temperature"] = max(0.5, model_params.get("temperature", 0.4) + 0.1)
             
-            # Use the BrainNode-specific client without streaming
-            completion = self.brain_llm.chat.completions.create(
-                model=model_params['model'],
-                messages=[{"role": "system", "content": system_message}, 
-                        {"role": "user", "content": simplified_prompt}],
-                temperature=model_params.get('temperature', 0.5),
-                top_p=model_params.get('top_p', 0.9),  # Slightly higher top_p for more reliable generation
-                max_tokens=model_params.get('max_tokens', 4096),
-                stream=False  # Disable streaming for fallback
-            )
-            
-            result = completion.choices[0].message.content
-            self.logger.info(f"Fallback non-streaming complete: {len(result)} chars")
-            return result
+            # Prefer centralized LLMManager if available
+            llm_manager = getattr(self, "llm_manager", None)
+            db_session = getattr(self, "db_session", None)
+            if llm_manager and db_session:
+                messages = [
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": simplified_prompt},
+                ]
+                exec_id = getattr(self, "execution_id", None)
+                user_id = getattr(self, "user_id", None)
+                try:
+                    if isinstance(exec_id, str):
+                        exec_id = uuid.UUID(exec_id)
+                except Exception:
+                    exec_id = None
+                try:
+                    if isinstance(user_id, str):
+                        user_id = uuid.UUID(user_id)
+                except Exception:
+                    user_id = None
+
+                result = await llm_manager.generate(
+                    db_session,
+                    user_id=user_id,
+                    model=model_params['model'],
+                    messages=messages,
+                    stream=False,
+                    temperature=model_params.get('temperature', 0.5),
+                    max_tokens=model_params.get('max_tokens', 4096),
+                    extra={},
+                    execution_id=exec_id,
+                )
+                text = getattr(result, 'content', None) or ""
+                self.logger.info(f"Fallback non-streaming complete: {len(text)} chars (via LLMManager)")
+                return text
+
+            # Use the BrainNode-specific client without streaming if available
+            if self.brain_llm:
+                completion = self.brain_llm.chat.completions.create(
+                    model=model_params['model'],
+                    messages=[{"role": "system", "content": system_message}, 
+                            {"role": "user", "content": simplified_prompt}],
+                    temperature=model_params.get('temperature', 0.5),
+                    top_p=model_params.get('top_p', 0.9),
+                    max_tokens=model_params.get('max_tokens', 4096),
+                    stream=False
+                )
+                result = completion.choices[0].message.content
+                self.logger.info(f"Fallback non-streaming complete: {len(result)} chars (via local client)")
+                return result
+
+            # If no provider available at all
+            self.logger.error("No LLM provider available for BrainNode fallback reasoning")
+            return self._generate_error_reasoning("No LLM provider available (LLMManager or local provider)")
             
         except Exception as e:
             self.logger.error(f"Critical error in fallback reasoning: {str(e)}")

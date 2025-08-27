@@ -172,6 +172,7 @@ class ModelProvider(Base):
     output_token_cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     endpoint_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     pricing_config: Mapped[Dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
-    metadata: Mapped[Dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    # 'metadata' is reserved on Declarative models; map attribute 'meta' to DB column 'metadata'.
+    meta: Mapped[Dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

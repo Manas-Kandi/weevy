@@ -236,11 +236,15 @@ function handleDeleteProject(id: string) {
 
 <svelte:head>
  <title>Weev - AI Agent Workflow Builder</title>
+  <!-- Light mode font: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 </svelte:head>
 
 <div class="app">
   
-  <main class="main" style={`margin-left: ${sidebarCollapsed ? '56px' : '200px'}` }>
+  <main class="main" style={`margin-left: ${sidebarCollapsed ? '76px' : '320px'}` }>
     <ComponentsPanel 
       projects={projects}
       currentProjectId={currentProjectId}
@@ -265,19 +269,76 @@ function handleDeleteProject(id: string) {
 </div>
 
 <style>
-.app { display:flex; flex-direction: column; height: 100vh; }
-.topbar { height: 56px; display:flex; align-items:center; padding: 0 16px; gap: 12px; }
-.topbar.minimal { background: transparent; box-shadow: none; border: none; }
-.brand { font-weight: 600; letter-spacing: 0.2px; font-size: 14px; }
-.spacer { flex: 1; }
-.actions { display:flex; gap:10px; }
-.btn { background: rgba(255,255,255,0.06); color: var(--text); border: none; border-radius: 0; padding: 6px 12px; cursor: pointer; transition: background 160ms ease; }
-.btn:hover { background: rgba(255,255,255,0.1); }
-.btn.ghost { background: transparent; }
+  /* Premium AI Environment Theme */
+  :global(:root) {
+    --canvas-bg: #FAFAF9;
+    --canvas-grid: #E5E5E5;
+    --app-bg: linear-gradient(135deg, #FAFAF9 0%, #F8F8F7 100%);
+    
+    /* Premium glassmorphism system */
+    --glass: rgba(255, 255, 255, 0.75);
+    --glass-border: rgba(255, 255, 255, 0.2);
+    --panel-float: rgba(255, 255, 255, 0.85);
+    --node-glass: rgba(255, 255, 255, 0.9);
+    
+    --border: rgba(0, 0, 0, 0.06);
+    --border-soft: rgba(0, 0, 0, 0.03);
+    --text: #1A1A1A;
+    --text-secondary: #4A4A4A;
+    --muted: rgba(0, 0, 0, 0.45);
+    
+    /* Premium shadows & effects */
+    --shadow-soft: 0 2px 16px rgba(0, 0, 0, 0.04);
+    --shadow-float: 0 8px 32px rgba(0, 0, 0, 0.08);
+    --shadow-node: 0 4px 24px rgba(0, 0, 0, 0.06);
+    --glow-subtle: 0 0 20px rgba(255, 255, 255, 0.6);
+    
+    /* Spring animations */
+    --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    --ease-smooth: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
 
-.main {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
- }
+    /* Premium node type gradients */
+    --grad-input: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%);      /* blue to cyan */
+    --grad-brain: linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%);      /* purple to pink */
+    --grad-output: linear-gradient(135deg, #10B981 0%, #34D399 100%);     /* emerald gradient */
+    --grad-knowledge: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);  /* indigo to violet */
+    --grad-tool: linear-gradient(135deg, #F59E0B 0%, #EAB308 100%);       /* amber gradient */
+    
+    /* Accent colors (lighter versions for UI elements) */
+    --acc-input: #60A5FA;
+    --acc-brain: #A78BFA;
+    --acc-output: #4ADE80;
+    --acc-knowledge: #818CF8;
+    --acc-tool: #FBBF24;
+  }
+
+  :global(html, body) {
+    height: 100%;
+  }
+
+  :global(body) {
+    margin: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-weight: 400;
+    color: var(--text);
+    background: var(--app-bg);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .app { display:flex; flex-direction: column; height: 100vh; }
+
+  /* Removed unused topbar styles */
+
+  .main {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Selection */
+  :global(::selection) {
+    background: rgba(165, 180, 252, 0.35);
+  }
 </style>
