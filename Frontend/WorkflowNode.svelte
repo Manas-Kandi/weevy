@@ -10,8 +10,12 @@
 
 	let focused = false;
 	let hovering = false;
+	// Connection-related state
 	let showInputPort = false;
 	let showOutputPort = false;
+	let isDraggingConnection = false;
+	let connectionStartPoint: { x: number; y: number } | null = null;
+	let connectionCurrentPoint: { x: number; y: number } | null = null;
 	let titleEl: HTMLTextAreaElement;
 	let descEl: HTMLTextAreaElement;
 	
@@ -35,8 +39,11 @@
 
 	const dispatch = createEventDispatcher<{
 		select: void;
-		connectionStart: { nodeId: string; port: 'output' };
-		connectionEnd: { nodeId: string; port: 'input' };
+		connectionStart: { nodeId: string; port: 'output'; startPoint: { x: number; y: number } };
+		connectionTarget: { nodeId: string; port: 'input' };
+		connectionDrag: { nodeId: string; startPoint: { x: number; y: number }; currentPoint: { x: number; y: number } };
+		connectionComplete: { fromNodeId: string; toNodeId: string; fromPort: string; toPort: string };
+		connectionCancel: { nodeId: string };
 		nodestartdrag: { nodeId: string; event: MouseEvent };
 		delete: { nodeId: string };
 	}>();
@@ -290,12 +297,77 @@
 
 	function handleOutputPortMouseDown(e: MouseEvent) {
 		e.stopPropagation();
-		dispatch('connectionStart', { nodeId: node.id, port: 'output' });
+		e.preventDefault();
+		
+		isDraggingConnection = true;
+		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		connectionStartPoint = {
+			x: rect.left + rect.width / 2,
+			y: rect.top + rect.height / 2
+		};
+		connectionCurrentPoint = { ...connectionStartPoint };
+		
+		dispatch('connectionStart', { nodeId: node.id, port: 'output', startPoint: connectionStartPoint });
+		
+		// Add global mouse listeners
+		document.addEventListener('mousemove', handleConnectionDrag);
+		document.addEventListener('mouseup', handleConnectionEnd);
 	}
 
 	function handleInputPortMouseDown(e: MouseEvent) {
 		e.stopPropagation();
-		dispatch('connectionEnd', { nodeId: node.id, port: 'input' });
+		e.preventDefault();
+		
+		// Input ports are targets, not sources, so we dispatch a different event
+		dispatch('connectionTarget', { nodeId: node.id, port: 'input' });
+	}
+	
+	function handleConnectionDrag(e: MouseEvent) {
+		if (!isDraggingConnection || !connectionStartPoint) return;
+		
+		connectionCurrentPoint = {
+			x: e.clientX,
+			y: e.clientY
+		};
+		
+		dispatch('connectionDrag', { 
+			nodeId: node.id, 
+			startPoint: connectionStartPoint, 
+			currentPoint: connectionCurrentPoint 
+		});
+	}
+	
+	function handleConnectionEnd(e: MouseEvent) {
+		if (!isDraggingConnection) return;
+		
+		isDraggingConnection = false;
+		connectionStartPoint = null;
+		connectionCurrentPoint = null;
+		
+		// Check if we're over a valid connection target
+		const elementUnderMouse = document.elementFromPoint(e.clientX, e.clientY);
+		const targetPort = elementUnderMouse?.closest('.input-port');
+		const targetNode = targetPort?.closest('.pocket-note');
+		const sourceNode = document.querySelector(`[data-node-id="${node.id}"]`);
+		
+		if (targetNode && targetNode !== sourceNode && targetPort) {
+			const targetNodeId = targetNode.getAttribute('data-node-id');
+			if (targetNodeId) {
+				dispatch('connectionComplete', { 
+					fromNodeId: node.id, 
+					toNodeId: targetNodeId,
+					fromPort: 'output',
+					toPort: 'input'
+				});
+			}
+		} else {
+			// Connection cancelled - dropped in empty space
+			dispatch('connectionCancel', { nodeId: node.id });
+		}
+		
+		// Remove global listeners
+		document.removeEventListener('mousemove', handleConnectionDrag);
+		document.removeEventListener('mouseup', handleConnectionEnd);
 	}
 
 	function handleDeleteClick(e: MouseEvent) {
@@ -441,18 +513,20 @@
 	class:focused
 	class:hovering
 	class:dropdown-open={showAppAutocomplete}
+	class:dragging-connection={isDraggingConnection}
 	style="left: {node.position.x}px; top: {node.position.y}px; --accent-color: {nodeColors[node.type]};"
+	data-node-id={node.id}
 	on:click={handleClick}
 	on:mousedown={handleMouseDown}
 	on:mouseenter={() => hovering = true}
 	on:mouseleave={() => hovering = false}
 	role="button"
 	aria-pressed={selected}
-	aria-label={`${nodeTypeLabels[node.type]} ${node.data.label}`}
+	aria-label="{nodeTypeLabels[node.type]} {node.data.label}"
 	tabindex="0"
 	in:scale={{ duration: 600, easing: elasticOut, start: 0.8 }}
 >
-	<!-- Input Port Area - invisible hover zone -->
+	<!-- Input Port Area - left edge hover zone -->
 	<div 
 		class="port-hover-zone input-zone"
 		on:mouseenter={() => showInputPort = true}
@@ -461,17 +535,15 @@
 		aria-label="Input connection area"
 		tabindex="-1"
 	>
-		{#if showInputPort || hovering}
-			<div 
-				class="connection-port input-port"
-				on:mousedown={handleInputPortMouseDown}
-				title="Connect to this node"
-				role="button"
-				aria-label="Connect to this node"
-				tabindex="0"
-				in:scale={{ duration: 200, start: 0.3 }}
-			></div>
-		{/if}
+		<!-- Always show for debugging -->
+		<div 
+			class="connection-port input-port"
+			on:mousedown={handleInputPortMouseDown}
+			title="Connect to this node"
+			role="button"
+			aria-label="Connect to this node"
+			tabindex="0"
+		></div>
 	</div>
 
 	<!-- Floating animation icon -->
@@ -716,7 +788,7 @@
 		/>
 	{/if}
 
-	<!-- Output Port Area - invisible hover zone -->
+	<!-- Output Port Area - right edge hover zone -->
 	<div 
 		class="port-hover-zone output-zone"
 		on:mouseenter={() => showOutputPort = true}
@@ -725,17 +797,15 @@
 		aria-label="Output connection area"
 		tabindex="-1"
 	>
-		{#if showOutputPort || hovering}
-			<div 
-				class="connection-port output-port"
-				on:mousedown={handleOutputPortMouseDown}
-				title="Create connection from this node"
-				role="button"
-				aria-label="Create connection from this node"
-				tabindex="0"
-				in:scale={{ duration: 200, start: 0.3 }}
-			></div>
-		{/if}
+		<!-- Always show for debugging -->
+		<div 
+			class="connection-port output-port"
+			on:mousedown={handleOutputPortMouseDown}
+			title="Create connection from this node"
+			role="button"
+			aria-label="Create connection from this node"
+			tabindex="0"
+		></div>
 	</div>
 
 	<!-- App Autocomplete Suggestions -->
@@ -883,46 +953,49 @@
 
 	.port-hover-zone {
 		position: absolute;
-		width: 60px;
-		height: 80px;
+		width: 30px;
+		height: 60px;
 		top: 50%;
 		transform: translateY(-50%);
-		z-index: 5;
+		z-index: 998;
 		/* Invisible hover zone */
+		/* Debug: make visible */
+		background: rgba(255, 0, 0, 0.1);
 	}
 
 	.input-zone {
-		left: -50px;
+		left: -15px;
 	}
 
 	.output-zone {
-		right: -50px;
+		right: -15px;
 	}
 
 	.connection-port {
 		position: absolute;
-		width: 16px;
-		height: 16px;
+		width: 18px;
+		height: 18px;
 		border-radius: 50%;
 		cursor: pointer;
 		top: 50%;
 		transform: translateY(-50%);
-		z-index: 15;
-		box-shadow: 
-			0 4px 12px rgba(0, 0, 0, 0.15),
-			0 0 0 2px rgba(255, 255, 255, 1) inset;
-		backdrop-filter: blur(8px);
-		transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+		z-index: 9999;
+		box-shadow: 0 3px 12px rgba(0, 0, 0, 0.4);
+		transition: all 0.2s ease;
+		opacity: 0.9;
+		pointer-events: all;
 	}
 
 	.input-port {
-		left: 22px;
-		background: linear-gradient(135deg, #10B981 0%, #34D399 100%);
+		left: -8px;
+		background: #10B981;
+		border: 3px solid white;
 	}
 
 	.output-port {
-		right: 22px;
-		background: var(--accent-color);
+		right: -8px;
+		background: #3B82F6;
+		border: 3px solid white;
 	}
 
 	.connection-port:hover {

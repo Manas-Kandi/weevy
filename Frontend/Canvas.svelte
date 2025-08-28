@@ -33,6 +33,7 @@
  let isConnecting = false;
  let connectionStart: string | null = null;
  let connectionPreview: { startX: number; startY: number; endX: number; endY: number } | null = null;
+ let dragConnectionPreview: { startX: number; startY: number; endX: number; endY: number } | null = null;
 
  function typeColorVar(t: string): string {
   switch (t) {
@@ -204,42 +205,62 @@ function handleMouseUp() {
   updateCanvasTransform();
  }
 
- function handleConnectionStart(event: CustomEvent<{ nodeId: string; port: string }>) {
- const { nodeId, port } = event.detail;
+ function handleConnectionStart(event: CustomEvent<{ nodeId: string; port: string; startPoint: { x: number; y: number } }>) {
+ const { nodeId, port, startPoint } = event.detail;
  isConnecting = true;
  connectionStart = nodeId;
  
- // Calculate start position for preview based on port
- const node = nodes.get(nodeId);
- if (node) {
-  const startX = port === 'output' ? node.position.x + 320 : node.position.x;
-  const startY = node.position.y + 120; // Center of node
-  
-  connectionPreview = {
-   startX,
-   startY,
-   endX: startX,
-   endY: startY
-  };
- }
+ // Convert screen coordinates to canvas coordinates
+ const rect = canvasElement.getBoundingClientRect();
+ const canvasX = (startPoint.x - rect.left - offsetX) / scale;
+ const canvasY = (startPoint.y - rect.top - offsetY) / scale;
+ 
+ dragConnectionPreview = {
+  startX: canvasX,
+  startY: canvasY,
+  endX: canvasX,
+  endY: canvasY
+ };
 }
 
-function handleConnectionEnd(event: CustomEvent<{ nodeId: string; port: string }>) {
- const { nodeId, port } = event.detail;
- if (isConnecting && connectionStart && connectionStart !== nodeId && port === 'input') {
-  // Create connection from output to input
-  const connectionId = `${connectionStart}-${nodeId}`;
-  connections.set(connectionId, {
-   id: connectionId,
-   from: connectionStart,
-   to: nodeId
-  });
-  connections = connections; // Trigger reactivity
- }
+function handleConnectionDrag(event: CustomEvent<{ nodeId: string; startPoint: { x: number; y: number }; currentPoint: { x: number; y: number } }>) {
+ if (!isConnecting || !dragConnectionPreview) return;
+ 
+ const { currentPoint } = event.detail;
+ const rect = canvasElement.getBoundingClientRect();
+ const canvasX = (currentPoint.x - rect.left - offsetX) / scale;
+ const canvasY = (currentPoint.y - rect.top - offsetY) / scale;
+ 
+ dragConnectionPreview.endX = canvasX;
+ dragConnectionPreview.endY = canvasY;
+ dragConnectionPreview = { ...dragConnectionPreview }; // Trigger reactivity
+}
+
+function handleConnectionComplete(event: CustomEvent<{ fromNodeId: string; toNodeId: string; fromPort: string; toPort: string }>) {
+ const { fromNodeId, toNodeId } = event.detail;
+ 
+ // Create connection between nodes
+ const connectionId = `${fromNodeId}-${toNodeId}`;
+ connections.set(connectionId, {
+  id: connectionId,
+  from: fromNodeId,
+  to: toNodeId
+ });
+ connections = connections; // Trigger reactivity
+ 
+ // Clean up
  isConnecting = false;
  connectionStart = null;
- connectionPreview = null;
+ dragConnectionPreview = null;
 }
+
+function handleConnectionCancel(event: CustomEvent<{ nodeId: string }>) {
+ // Clean up cancelled connection
+ isConnecting = false;
+ connectionStart = null;
+ dragConnectionPreview = null;
+}
+
 
 function handleNodeDelete(event: CustomEvent<{ nodeId: string }>) {
  const { nodeId } = event.detail;
@@ -312,8 +333,16 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
       <path class="edge" style={`--edge-color: ${typeColorVar(fromNode.type)}`} d={`M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`} />
     {/if}
    {/each}
-   {#if connectionPreview}
-    <path class="edge preview" stroke="#3B82F6" stroke-width="3" stroke-dasharray="8,4" fill="none" opacity="0.7" d={`M ${connectionPreview.startX} ${connectionPreview.startY} C ${connectionPreview.startX + 100} ${connectionPreview.startY}, ${connectionPreview.endX - 100} ${connectionPreview.endY}, ${connectionPreview.endX} ${connectionPreview.endY}`} />
+   {#if dragConnectionPreview}
+    <path 
+     class="edge preview" 
+     stroke="#3B82F6" 
+     stroke-width="3" 
+     stroke-dasharray="8,4" 
+     fill="none" 
+     opacity="0.8" 
+     d={`M ${dragConnectionPreview.startX} ${dragConnectionPreview.startY} C ${dragConnectionPreview.startX + 100} ${dragConnectionPreview.startY}, ${dragConnectionPreview.endX - 100} ${dragConnectionPreview.endY}, ${dragConnectionPreview.endX} ${dragConnectionPreview.endY}`} 
+    />
    {/if}
    <defs>
     <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
@@ -332,7 +361,9 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
     {node}
     selected={selectedNodeId === node.id}
     on:connectionStart={handleConnectionStart}
-    on:connectionEnd={handleConnectionEnd}
+    on:connectionDrag={handleConnectionDrag}
+    on:connectionComplete={handleConnectionComplete}
+    on:connectionCancel={handleConnectionCancel}
     on:nodestartdrag={handleNodeStartDrag}
     on:delete={handleNodeDelete}
     on:select={() => selectedNodeId = node.id}
