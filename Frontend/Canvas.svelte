@@ -365,14 +365,19 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
   height: 5000px;
   background: var(--canvas-bg);
   background-image: 
-    /* Dot grid pattern */
-    radial-gradient(circle at 1px 1px, var(--canvas-grid) 1px, transparent 0),
+    /* Dense random dot pattern - multiple layers for organic feel */
+    radial-gradient(circle at 0.3px 0.3px, rgba(0, 0, 0, 0.08) 0.3px, transparent 0),
+    radial-gradient(circle at 2.1px 3.7px, rgba(0, 0, 0, 0.06) 0.3px, transparent 0),
+    radial-gradient(circle at 4.8px 1.2px, rgba(0, 0, 0, 0.05) 0.3px, transparent 0),
+    radial-gradient(circle at 1.7px 2.9px, rgba(0, 0, 0, 0.07) 0.3px, transparent 0),
+    radial-gradient(circle at 3.4px 4.1px, rgba(0, 0, 0, 0.04) 0.3px, transparent 0),
+    radial-gradient(circle at 0.9px 4.6px, rgba(0, 0, 0, 0.06) 0.3px, transparent 0),
     /* Ambient lighting - darker edges, lighter center */
     radial-gradient(ellipse 2000px 1500px at 50% 45%, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.1) 40%, rgba(0, 0, 0, 0.02) 100%),
     /* Subtle color zones for visual interest */
     radial-gradient(ellipse 1200px 800px at 20% 30%, rgba(59, 130, 246, 0.04) 0%, transparent 50%),
     radial-gradient(ellipse 1000px 600px at 80% 70%, rgba(139, 92, 246, 0.03) 0%, transparent 50%);
-  background-size: 20px 20px, 100% 100%, 100% 100%, 100% 100%;
+  background-size: 6px 6px, 6px 6px, 6px 6px, 6px 6px, 6px 6px, 6px 6px, 100% 100%, 100% 100%, 100% 100%;
   cursor: grab;
   will-change: transform;
  }

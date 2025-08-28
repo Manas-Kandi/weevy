@@ -78,7 +78,7 @@
 
 <style>
   .tool-config {
-    background: rgba(255,255,255,0.55);
+    background: rgba(161, 6, 6, 0.55);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 12px;

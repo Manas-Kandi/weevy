@@ -20,6 +20,19 @@
 	let appSearchQuery = '';
 	let selectedAppIndex = -1;
 
+	// Input Node specific state
+	let inputType = 'text'; // text, file, button, form, multiple-choice
+	let inputValue = '';
+	let testData = '';
+	let showTypeSelector = false;
+	let files: FileList | null = null;
+	let multipleChoiceOptions = ['Option 1', 'Option 2', 'Option 3'];
+	let selectedChoice = '';
+	let formFields = [
+		{ label: 'Name', value: '', type: 'text' },
+		{ label: 'Email', value: '', type: 'email' }
+	];
+
 	const dispatch = createEventDispatcher<{
 		select: void;
 		connectionStart: { nodeId: string; port: 'output' };
@@ -161,13 +174,20 @@
 	// For externalApp, initialize app and mode
 	if (node.type === 'externalApp') {
 		conf.app ||= '';
-		conf.rules ||= '';
 		// Initialize dynamic fields based on app
 		if (conf.app && appFieldConfigs[conf.app]) {
 			appFieldConfigs[conf.app].forEach(field => {
 				conf[field.key] ||= '';
 			});
 		}
+	}
+
+	// For input nodes, initialize input type and test data
+	if (node.type === 'input') {
+		conf.inputType ||= 'text';
+		conf.testData ||= '';
+		inputType = conf.inputType;
+		testData = conf.testData;
 	}
 
 	// Dynamic content for externalApp
@@ -278,11 +298,9 @@
 		dispatch('connectionEnd', { nodeId: node.id, port: 'input' });
 	}
 
-	function handleKeyDown(e: KeyboardEvent) {
-		if (e.key === 'Delete' || e.key === 'Backspace') {
-			e.preventDefault();
-			dispatch('delete', { nodeId: node.id });
-		}
+	function handleDeleteClick(e: MouseEvent) {
+		e.stopPropagation();
+		dispatch('delete', { nodeId: node.id });
 	}
 
 	function handleTitleFocus() {
@@ -370,6 +388,51 @@
 			selectedAppIndex = -1;
 		}, 150);
 	}
+
+	// Input Node interaction handlers
+	function handleInputChange() {
+		testData = inputValue;
+		conf.testData = testData;
+		conf.inputType = inputType;
+	}
+
+	function handleFileChange() {
+		if (files && files.length > 0) {
+			const fileNames = Array.from(files).map(f => f.name).join(', ');
+			testData = `Files: ${fileNames}`;
+			conf.testData = testData;
+		}
+	}
+
+	function handleButtonClick() {
+		testData = `Button "${inputValue || 'Click Me'}" clicked`;
+		conf.testData = testData;
+	}
+
+	function handleFormChange() {
+		const formData = formFields.map(f => `${f.label}: ${f.value}`).filter(f => f.split(': ')[1]).join(', ');
+		testData = formData || 'Form data: (empty)';
+		conf.testData = testData;
+	}
+
+	function handleChoiceChange() {
+		testData = `Selected: ${selectedChoice}`;
+		conf.testData = testData;
+	}
+
+	function handleTypeChange(type: string) {
+		inputType = type;
+		conf.inputType = type;
+		showTypeSelector = false;
+		
+		// Reset values when changing type
+		inputValue = '';
+		files = null;
+		selectedChoice = '';
+		formFields.forEach(f => f.value = '');
+		testData = '';
+		conf.testData = '';
+	}
 </script>
 
 <div 
@@ -387,7 +450,6 @@
 	aria-pressed={selected}
 	aria-label={`${nodeTypeLabels[node.type]} ${node.data.label}`}
 	tabindex="0"
-	on:keydown={handleKeyDown}
 	in:scale={{ duration: 600, easing: elasticOut, start: 0.8 }}
 >
 	<!-- Input Port Area - invisible hover zone -->
@@ -419,6 +481,14 @@
 		</div>
 	{/if}
 	
+	<button 
+		class="delete-button" 
+		on:click={handleDeleteClick}
+		title="Delete node"
+	>
+		×
+	</button>
+	
 	<div class="node-type">
 		<svelte:component this={nodeIcons[node.type]} size={14} /> 
 		{nodeTypeLabels[node.type]}
@@ -439,9 +509,10 @@
 		<div class="config-fields">
 			<!-- App Selection with Autocomplete -->
 			<div class="input-group">
-				<label class="input-label">App</label>
+				<label class="input-label" for="app-input-{node.id}">App</label>
 				<div class="input-container">
 					<input
+						id="app-input-{node.id}"
 						type="text"
 						class="config-input"
 						placeholder="Start typing app name..."
@@ -454,7 +525,8 @@
 					{#if showAppAutocomplete && filteredApps.length > 0}
 						<div class="autocomplete-dropdown" on:click|stopPropagation>
 							{#each filteredApps as app, index}
-								<div 
+								<button 
+									type="button"
 									class="autocomplete-item"
 									class:selected={selectedAppIndex === index}
 									on:click|stopPropagation={() => selectApp(app.id)}
@@ -465,7 +537,7 @@
 										<div class="app-name">{app.name}</div>
 										<div class="app-description">{app.description}</div>
 									</div>
-								</div>
+								</button>
 							{/each}
 						</div>
 					{/if}
@@ -476,8 +548,9 @@
 			{#if conf.app && conf.currentFields && conf.currentFields.length > 0}
 				{#each conf.currentFields as field}
 					<div class="input-group">
-						<label class="input-label">{field.label}</label>
+						<label class="input-label" for="{field.key}-input-{node.id}">{field.label}</label>
 						<input
+							id="{field.key}-input-{node.id}"
 							type="text"
 							class="config-input"
 							placeholder={field.placeholder}
@@ -486,17 +559,131 @@
 					</div>
 				{/each}
 			{/if}
-			
-			<!-- Rules Field for Natural Language Instructions -->
-			{#if conf.app}
-				<div class="input-group">
-					<label class="input-label">Rules</label>
+		</div>
+	{:else if node.type === 'input'}
+		<!-- Interactive Input Node -->
+		<div class="input-node-container">
+			<!-- Input Area -->
+			<div class="input-area">
+				{#if inputType === 'text'}
 					<textarea
-						class="config-textarea"
-						placeholder="Describe how this integration should behave in natural language... (e.g., 'Send a welcome email when a new user signs up', 'Create a JIRA ticket when an error occurs', 'Post to Slack when deployment completes')"
-						bind:value={conf.rules}
-						rows="3"
+						class="interactive-input text-input"
+						placeholder="Type your input here..."
+						bind:value={inputValue}
+						on:input={handleInputChange}
+						on:mousedown|stopPropagation
+						rows="4"
 					></textarea>
+				{:else if inputType === 'file'}
+					<div class="file-upload-zone" class:has-files={files && files.length > 0}>
+						<input
+							type="file"
+							multiple
+							bind:files
+							on:change={handleFileChange}
+							id="file-input-{node.id}"
+							class="file-input"
+						/>
+						<label for="file-input-{node.id}" class="file-upload-label">
+							{#if files && files.length > 0}
+								<div class="file-count">{files.length} file{files.length > 1 ? 's' : ''} selected</div>
+								<div class="file-names">
+									{#each Array.from(files) as file}
+										<div class="file-name">{file.name}</div>
+									{/each}
+								</div>
+							{:else}
+								<div class="upload-icon">📁</div>
+								<div class="upload-text">Drop files here or click to upload</div>
+							{/if}
+						</label>
+					</div>
+				{:else if inputType === 'button'}
+					<button class="interactive-button" on:click={handleButtonClick} on:mousedown|stopPropagation>
+						{inputValue || 'Click Me'}
+					</button>
+					<input
+						type="text"
+						class="button-label-input"
+						placeholder="Button label..."
+						bind:value={inputValue}
+						on:mousedown|stopPropagation
+					/>
+				{:else if inputType === 'form'}
+					<div class="form-container">
+						{#each formFields as field, i}
+							<div class="form-field">
+								<label class="form-label" for="form-{i}-{node.id}">{field.label}</label>
+								{#if field.type === 'email'}
+									<input
+										id="form-{i}-{node.id}"
+										type="email"
+										class="form-input"
+										bind:value={field.value}
+										on:input={() => handleFormChange()}
+										on:mousedown|stopPropagation
+									/>
+								{:else}
+									<input
+										id="form-{i}-{node.id}"
+										type="text"
+										class="form-input"
+										bind:value={field.value}
+										on:input={() => handleFormChange()}
+										on:mousedown|stopPropagation
+									/>
+								{/if}
+							</div>
+						{/each}
+					</div>
+				{:else if inputType === 'multiple-choice'}
+					<div class="multiple-choice-container">
+						{#each multipleChoiceOptions as option, i}
+							<label class="choice-option">
+								<input
+									type="radio"
+									bind:group={selectedChoice}
+									value={option}
+									on:change={handleChoiceChange}
+								/>
+								{option}
+							</label>
+						{/each}
+					</div>
+				{/if}
+			</div>
+
+			<!-- Type Selector -->
+			<div class="type-selector-container">
+				<button 
+					class="type-selector"
+					on:click={() => showTypeSelector = !showTypeSelector}
+					on:mousedown|stopPropagation
+				>
+					{inputType === 'multiple-choice' ? 'Multiple Choice' : inputType.charAt(0).toUpperCase() + inputType.slice(1)} ▼
+				</button>
+				
+				{#if showTypeSelector}
+					<div class="type-dropdown">
+						{#each ['text', 'file', 'button', 'form', 'multiple-choice'] as type}
+							<button 
+								class="type-option"
+								class:selected={inputType === type}
+								on:click={() => handleTypeChange(type)}
+								on:mousedown|stopPropagation
+							>
+								{type === 'multiple-choice' ? 'Multiple Choice' : type.charAt(0).toUpperCase() + type.slice(1)}
+							</button>
+						{/each}
+					</div>
+				{/if}
+			</div>
+
+			<!-- Test Data Display -->
+			{#if testData}
+				<div class="test-data">
+					<div class="test-data-label">Test Data:</div>
+					<div class="test-data-value">{testData}</div>
 				</div>
 			{/if}
 		</div>
@@ -514,17 +701,20 @@
 		/>
 	{/if}
 	
-	<textarea
-		bind:this={descEl}
-		class="description"
-		placeholder="Describe what this node does in natural language..."
-		bind:value={conf.description}
-		on:mousedown|stopPropagation
-		on:focus={handleDescriptionFocus}
-		on:blur={() => focused = false}
-		on:input={handleResize}
-		rows="3"
-	/>
+	{#if node.type !== 'input'}
+		<textarea
+			bind:this={descEl}
+			class="description"
+			class:external-app-description={node.type === 'externalApp'}
+			placeholder={node.type === 'externalApp' ? 'Describe how this integration should behave in natural language... (e.g., "Send a welcome email when a new user signs up", "Create a JIRA ticket when an error occurs", "Post to Slack when deployment completes")' : 'Describe what this node does in natural language...'}
+			bind:value={conf.description}
+			on:mousedown|stopPropagation
+			on:focus={handleDescriptionFocus}
+			on:blur={() => focused = false}
+			on:input={handleResize}
+			rows={node.type === 'externalApp' ? 4 : 3}
+		/>
+	{/if}
 
 	<!-- Output Port Area - invisible hover zone -->
 	<div 
@@ -763,30 +953,38 @@
 	}
 
 	/* Delete button area */
-	.pocket-note.selected::after {
-		content: '×';
+	.delete-button {
 		position: absolute;
-		top: -8px;
-		right: -8px;
-		width: 24px;
-		height: 24px;
-		background: #EF4444;
-		color: white;
+		top: 8px;
+		right: 8px;
+		width: 20px;
+		height: 20px;
+		border: none;
+		background: transparent;
+		color: rgba(0, 0, 0, 0.1);
+		font-size: 14px;
+		font-weight: 500;
+		cursor: pointer;
 		border-radius: 50%;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		font-size: 16px;
-		font-weight: 600;
-		cursor: pointer;
-		box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
 		transition: all 0.2s ease;
-		z-index: 20;
+		z-index: 10;
+		line-height: 1;
+		padding: 0;
+		opacity: 0;
+		transform: scale(0.8);
 	}
 
-	.pocket-note.selected:hover::after {
-		transform: scale(1.1);
-		box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+	.pocket-note:hover .delete-button {
+		opacity: 1;
+		transform: scale(1);
+		color: rgba(0, 0, 0, 0.3);
+	}
+
+	.delete-button:hover {
+		color: #ef4444 !important;
 	}
 
 	/* External App Node Styles - Clean Interface */
@@ -918,6 +1116,11 @@
 		transition: background-color 0.2s ease;
 		border-radius: 6px;
 		margin: 2px;
+		border: none;
+		background: transparent;
+		width: 100%;
+		text-align: left;
+		font-family: inherit;
 	}
 
 	.autocomplete-item:hover,
@@ -953,6 +1156,347 @@
 		box-shadow: 
 			0 12px 48px color-mix(in oklch, var(--accent-color) 10%, transparent),
 			0 4px 16px rgba(0, 0, 0, 0.04);
+	}
+
+	/* Subtle Delete Button */
+	.delete-button {
+		position: absolute;
+		top: 8px;
+		right: 8px;
+		width: 20px;
+		height: 20px;
+		border: none;
+		background: transparent;
+		color: rgba(0, 0, 0, 0.1);
+		font-size: 14px;
+		font-weight: 500;
+		cursor: pointer;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: all 0.2s ease;
+		z-index: 10;
+		line-height: 1;
+		padding: 0;
+		opacity: 0;
+		transform: scale(0.8);
+	}
+
+	.pocket-note:hover .delete-button {
+		opacity: 1;
+		transform: scale(1);
+		color: rgba(0, 0, 0, 0.3);
+	}
+
+	.delete-button:hover {
+		color: #ef4444 !important;
+		background: rgba(239, 68, 68, 0.1);
+		transform: scale(1.1) !important;
+	}
+
+	/* Additional spacing for external app description */
+	.description.external-app-description {
+		margin-top: 20px;
+	}
+
+	/* Interactive Input Node Styles */
+	.input-node-container {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		width: 100%;
+		min-height: 160px;
+		max-height: 200px;
+	}
+
+	.input-area {
+		flex: 1;
+		position: relative;
+		margin-bottom: 4px;
+	}
+
+	.interactive-input {
+		width: 100%;
+		height: 80px;
+		padding: 10px 12px;
+		border: 2px solid rgba(0, 0, 0, 0.08);
+		border-radius: 8px;
+		background: rgba(255, 255, 255, 0.9);
+		font-size: 14px;
+		color: #111827;
+		font-family: inherit;
+		transition: all 0.2s ease;
+		box-sizing: border-box;
+		resize: none;
+		outline: none;
+	}
+
+	.interactive-input:focus {
+		border-color: var(--accent-color);
+		box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent-color) 15%, transparent);
+		background: #FFFFFF;
+	}
+
+	.file-upload-zone {
+		position: relative;
+		width: 100%;
+		height: 100px;
+		border: 2px dashed rgba(0, 0, 0, 0.2);
+		border-radius: 8px;
+		background: rgba(255, 255, 255, 0.5);
+		transition: all 0.2s ease;
+	}
+
+	.file-upload-zone:hover {
+		border-color: var(--accent-color);
+		background: rgba(255, 255, 255, 0.8);
+	}
+
+	.file-upload-zone.has-files {
+		border-style: solid;
+		border-color: var(--accent-color);
+		background: color-mix(in oklch, var(--accent-color) 5%, white);
+	}
+
+	.file-input {
+		position: absolute;
+		width: 100%;
+		height: 100%;
+		opacity: 0;
+		cursor: pointer;
+	}
+
+	.file-upload-label {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		height: 100%;
+		cursor: pointer;
+		color: #6B7280;
+		text-align: center;
+		gap: 6px;
+		padding: 8px;
+	}
+
+	.upload-icon {
+		font-size: 20px;
+	}
+
+	.upload-text {
+		font-size: 12px;
+		font-weight: 500;
+	}
+
+	.file-count {
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--accent-color);
+	}
+
+	.file-names {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		max-height: 60px;
+		overflow-y: auto;
+	}
+
+	.file-name {
+		font-size: 11px;
+		color: #6B7280;
+		max-width: 200px;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.interactive-button {
+		width: 100%;
+		padding: 12px 24px;
+		background: var(--accent-color);
+		color: white;
+		border: none;
+		border-radius: 8px;
+		font-size: 14px;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.interactive-button:hover {
+		background: color-mix(in oklch, var(--accent-color) 85%, black);
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px color-mix(in oklch, var(--accent-color) 25%, transparent);
+	}
+
+	.button-label-input {
+		width: 100%;
+		margin-top: 6px;
+		padding: 6px 8px;
+		border: 1px solid rgba(0, 0, 0, 0.08);
+		border-radius: 6px;
+		background: rgba(255, 255, 255, 0.8);
+		font-size: 11px;
+		color: #6B7280;
+		outline: none;
+	}
+
+	.button-label-input:focus {
+		border-color: var(--accent-color);
+		box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent-color) 15%, transparent);
+	}
+
+	.form-container {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	.form-field {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.form-label {
+		font-size: 10px;
+		font-weight: 500;
+		color: #6B7280;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.form-input {
+		padding: 6px 8px;
+		border: 1px solid rgba(0, 0, 0, 0.08);
+		border-radius: 6px;
+		background: rgba(255, 255, 255, 0.9);
+		font-size: 12px;
+		color: #111827;
+		outline: none;
+		transition: all 0.2s ease;
+	}
+
+	.form-input:focus {
+		border-color: var(--accent-color);
+		box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent-color) 15%, transparent);
+		background: #FFFFFF;
+	}
+
+	.multiple-choice-container {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.choice-option {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 6px 8px;
+		border-radius: 6px;
+		cursor: pointer;
+		transition: background 0.2s ease;
+		font-size: 12px;
+		color: #111827;
+	}
+
+	.choice-option:hover {
+		background: rgba(0, 0, 0, 0.03);
+	}
+
+	.choice-option input[type="radio"] {
+		margin: 0;
+		accent-color: var(--accent-color);
+	}
+
+	.type-selector-container {
+		position: relative;
+		align-self: flex-end;
+		margin-top: 0;
+	}
+
+	.type-selector {
+		padding: 3px 6px;
+		background: rgba(255, 255, 255, 0.8);
+		border: 1px solid rgba(0, 0, 0, 0.1);
+		border-radius: 5px;
+		font-size: 10px;
+		color: #6B7280;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		text-transform: capitalize;
+		font-weight: 500;
+	}
+
+	.type-selector:hover {
+		border-color: var(--accent-color);
+		color: var(--accent-color);
+		background: color-mix(in oklch, var(--accent-color) 5%, white);
+	}
+
+	.type-dropdown {
+		position: absolute;
+		bottom: 100%;
+		right: 0;
+		margin-bottom: 4px;
+		background: white;
+		border: 1px solid rgba(0, 0, 0, 0.1);
+		border-radius: 8px;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+		z-index: 20;
+		min-width: 120px;
+		overflow: hidden;
+	}
+
+	.type-option {
+		width: 100%;
+		padding: 8px 12px;
+		background: transparent;
+		border: none;
+		text-align: left;
+		font-size: 12px;
+		color: #374151;
+		cursor: pointer;
+		transition: background 0.2s ease;
+		text-transform: capitalize;
+	}
+
+	.type-option:hover {
+		background: rgba(0, 0, 0, 0.05);
+	}
+
+	.type-option.selected {
+		background: color-mix(in oklch, var(--accent-color) 10%, white);
+		color: var(--accent-color);
+		font-weight: 600;
+	}
+
+	.test-data {
+		padding: 6px 8px;
+		border-radius: 6px;
+		background: color-mix(in oklch, var(--accent-color) 5%, white);
+		border: 1px solid color-mix(in oklch, var(--accent-color) 20%, transparent);
+		margin-top: 4px;
+	}
+
+	.test-data-label {
+		font-size: 9px;
+		font-weight: 600;
+		color: var(--accent-color);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		margin-bottom: 2px;
+	}
+
+	.test-data-value {
+		font-size: 11px;
+		color: #374151;
+		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+		word-break: break-word;
+		line-height: 1.3;
 	}
 </style>
 '''
