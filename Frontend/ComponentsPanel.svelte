@@ -68,9 +68,9 @@ let searchFocused: boolean = false;
 					icon: Wrench
 				},
 				{ 
-					type: 'apps', 
-					label: 'Apps', 
-					description: 'External service integrations',
+					type: 'externalApp', 
+					label: 'External App', 
+					description: 'Integrate with external services\nRead/write data from apps',
 					icon: Puzzle
 				}
 			]
@@ -313,7 +313,7 @@ let searchFocused: boolean = false;
     animation: knowledge-glow 800ms ease-in-out;
   }
 
-  .node-item[data-node-type="apps"]:hover .node-icon {
+  .node-item[data-node-type="externalApp"]:hover .node-icon {
     color: #8B5CF6;
     transform: scale(1.1) rotate(10deg);
     filter: drop-shadow(0 0 8px rgba(139, 92, 246, 0.4));
