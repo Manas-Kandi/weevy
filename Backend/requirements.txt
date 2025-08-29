@@ -15,3 +15,13 @@ pytest-asyncio>=0.21
 httpx>=0.27
 anthropic>=0.25.0
 google-generativeai>=0.7.0
+
+# LangChain Integration Dependencies
+langchain>=0.1.0
+langchain-community>=0.0.20
+langgraph>=0.0.32
+langsmith>=0.0.83
+chromadb>=0.4.18
+tiktoken>=0.5.2
+numpy>=1.24.0
+sentence-transformers>=2.2.2

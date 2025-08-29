@@ -13,6 +13,8 @@ export interface Connection {
   id: string;
   from: string;
   to: string;
+  fromPort?: string;
+  toPort?: string;
 }
 
 export interface WorkflowExecution {

@@ -6,6 +6,8 @@
  export let nodes: Map<string, Node> = new Map();
  export let connections: Map<string, Connection> = new Map();
  export let selectedNodeId: string | null = null;
+ let selectedConnectionId: string | null = null;
+ let hoveredConnectionId: string | null = null;
 
  const dispatch = createEventDispatcher<{
   nodeSelect: { nodeId: string };
@@ -32,6 +34,7 @@
  // Connection state
  let isConnecting = false;
  let connectionStart: string | null = null;
+ let connectionStartPort: string | null = null;
  let connectionPreview: { startX: number; startY: number; endX: number; endY: number } | null = null;
  let dragConnectionPreview: { startX: number; startY: number; endX: number; endY: number } | null = null;
 
@@ -67,8 +70,9 @@ onMount(() => {
 
  function handleMouseDown(e: MouseEvent) {
   if (e.target === canvasElement) {
-   // Clear node selection when clicking canvas
+   // Clear selections when clicking canvas
    selectedNodeId = null;
+   selectedConnectionId = null;
    
    isDraggingCanvas = true;
    dragStartX = e.clientX;
@@ -167,6 +171,19 @@ function handleMouseUp() {
   else if (e.key === 'ArrowDown') { offsetY -= panStep; updateCanvasTransform(); e.preventDefault(); }
   else if (e.key === '+' || e.key === '=') { smoothZoom(1.2); e.preventDefault(); }
   else if (e.key === '-' || e.key === '_') { smoothZoom(0.8); e.preventDefault(); }
+  else if (e.key === 'Delete' || e.key === 'Backspace') {
+   if (selectedConnectionId) {
+    connections.delete(selectedConnectionId);
+    connections = connections; // Trigger reactivity
+    selectedConnectionId = null;
+    e.preventDefault();
+   }
+  }
+  else if (e.key === 'Escape') {
+   selectedConnectionId = null;
+   selectedNodeId = null;
+   e.preventDefault();
+  }
  }
 
  function zoom(factor: number) {
@@ -205,10 +222,32 @@ function handleMouseUp() {
   updateCanvasTransform();
  }
 
+ function getPortCoordinates(nodeId: string, portType: 'input' | 'output'): { x: number; y: number } | null {
+  const nodeElement = document.querySelector(`[data-node-id="${nodeId}"]`);
+  if (!nodeElement) return null;
+  
+  const portElement = nodeElement.querySelector(`.${portType}-port`);
+  if (!portElement) return null;
+  
+  const portRect = portElement.getBoundingClientRect();
+  const canvasRect = canvasElement.getBoundingClientRect();
+  
+  // Calculate port center in canvas coordinates
+  const portCenterX = portRect.left + portRect.width / 2;
+  const portCenterY = portRect.top + portRect.height / 2;
+  
+  // Convert to canvas coordinate space
+  const canvasX = (portCenterX - canvasRect.left - offsetX) / scale;
+  const canvasY = (portCenterY - canvasRect.top - offsetY) / scale;
+  
+  return { x: canvasX, y: canvasY };
+ }
+
  function handleConnectionStart(event: CustomEvent<{ nodeId: string; port: string; startPoint: { x: number; y: number } }>) {
  const { nodeId, port, startPoint } = event.detail;
  isConnecting = true;
  connectionStart = nodeId;
+ connectionStartPort = port;
  
  // Convert screen coordinates to canvas coordinates
  const rect = canvasElement.getBoundingClientRect();
@@ -237,20 +276,35 @@ function handleConnectionDrag(event: CustomEvent<{ nodeId: string; startPoint: {
 }
 
 function handleConnectionComplete(event: CustomEvent<{ fromNodeId: string; toNodeId: string; fromPort: string; toPort: string }>) {
- const { fromNodeId, toNodeId } = event.detail;
+ const { fromNodeId, toNodeId, fromPort, toPort } = event.detail;
  
- // Create connection between nodes
+ // Prevent self-connections
+ if (fromNodeId === toNodeId) {
+  handleConnectionCancel({ detail: { nodeId: fromNodeId } });
+  return;
+ }
+ 
+ // Check for duplicate connections
  const connectionId = `${fromNodeId}-${toNodeId}`;
+ if (connections.has(connectionId)) {
+  handleConnectionCancel({ detail: { nodeId: fromNodeId } });
+  return;
+ }
+ 
+ // Create connection between nodes with port references
  connections.set(connectionId, {
   id: connectionId,
   from: fromNodeId,
-  to: toNodeId
+  to: toNodeId,
+  fromPort: fromPort,
+  toPort: toPort
  });
  connections = connections; // Trigger reactivity
  
  // Clean up
  isConnecting = false;
  connectionStart = null;
+ connectionStartPort = null;
  dragConnectionPreview = null;
 }
 
@@ -258,6 +312,7 @@ function handleConnectionCancel(event: CustomEvent<{ nodeId: string }>) {
  // Clean up cancelled connection
  isConnecting = false;
  connectionStart = null;
+ connectionStartPort = null;
  dragConnectionPreview = null;
 }
 
@@ -302,6 +357,7 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
  <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
  <div 
   class="canvas"
+  class:connecting={isConnecting}
   role="application"
   aria-label="Zoomable and pannable workflow canvas"
   bind:this={canvasElement}
@@ -321,16 +377,27 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
     {@const fromNode = nodes.get(connection.from)}
     {@const toNode = nodes.get(connection.to)}
     {#if fromNode && toNode}
-      {@const fromW = 320}
-      {@const fromH = 240}
-      {@const outOff = 0}
-      {@const toH = 240}
-      {@const x1 = fromNode.position.x + fromW + outOff}
-      {@const y1 = fromNode.position.y + fromH / 2}
-      {@const x2 = toNode.position.x}
-      {@const y2 = toNode.position.y + toH / 2}
-      {@const dx = Math.max(40, Math.abs(x2 - x1) * 0.35)}
-      <path class="edge" style={`--edge-color: ${typeColorVar(fromNode.type)}`} d={`M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`} />
+      {@const startCoords = getPortCoordinates(connection.from, 'output')}
+      {@const endCoords = getPortCoordinates(connection.to, 'input')}
+      {#if startCoords && endCoords}
+        {@const distance = Math.abs(endCoords.x - startCoords.x)}
+        {@const controlOffset = Math.min(60, distance * 0.3)}
+        {@const isSelected = selectedConnectionId === connection.id}
+        {@const isHovered = hoveredConnectionId === connection.id}
+        <path 
+          class="edge" 
+          class:selected={isSelected}
+          class:hovered={isHovered}
+          stroke="#3B82F6" 
+          stroke-width={isSelected || isHovered ? "4" : "3"}
+          opacity={isSelected || isHovered ? "1" : "0.8"}
+          d={`M ${startCoords.x} ${startCoords.y} C ${startCoords.x + controlOffset} ${startCoords.y}, ${endCoords.x - controlOffset} ${endCoords.y}, ${endCoords.x} ${endCoords.y}`}
+          on:click={() => selectedConnectionId = connection.id}
+          on:mouseenter={() => hoveredConnectionId = connection.id}
+          on:mouseleave={() => hoveredConnectionId = null}
+          style="pointer-events: stroke; cursor: pointer;"
+        />
+      {/if}
     {/if}
    {/each}
    {#if dragConnectionPreview}
@@ -340,11 +407,14 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
      stroke-width="3" 
      stroke-dasharray="8,4" 
      fill="none" 
-     opacity="0.8" 
-     d={`M ${dragConnectionPreview.startX} ${dragConnectionPreview.startY} C ${dragConnectionPreview.startX + 100} ${dragConnectionPreview.startY}, ${dragConnectionPreview.endX - 100} ${dragConnectionPreview.endY}, ${dragConnectionPreview.endX} ${dragConnectionPreview.endY}`} 
+     opacity="0.8"
+     d={`M ${dragConnectionPreview.startX} ${dragConnectionPreview.startY} C ${dragConnectionPreview.startX + 60} ${dragConnectionPreview.startY}, ${dragConnectionPreview.endX - 60} ${dragConnectionPreview.endY}, ${dragConnectionPreview.endX} ${dragConnectionPreview.endY}`} 
     />
    {/if}
    <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth">
+      <polygon points="0 0, 10 3.5, 0 7" fill="currentColor" />
+    </marker>
     <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
       <feGaussianBlur stdDeviation="3" result="coloredBlur" />
       <feMerge>
@@ -384,11 +454,11 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
   cursor: grab;
  }
 
- .canvas-container:active {
+.canvas-container:active {
   cursor: grabbing;
- }
+}
 
- .canvas {
+.canvas {
   position: absolute;
   top: 0;
   left: 0;
@@ -411,8 +481,9 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
   background-size: 6px 6px, 6px 6px, 6px 6px, 6px 6px, 6px 6px, 6px 6px, 100% 100%, 100% 100%, 100% 100%;
   cursor: grab;
   will-change: transform;
- }
- .canvas:active { cursor: grabbing; }
+}
+.canvas:active { cursor: grabbing; }
+.canvas.connecting { cursor: crosshair; }
  
  /* Ultra-smooth trackpad interactions */
  .canvas {
@@ -433,12 +504,11 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
 .edge {
   fill: none;
   stroke-width: 3;
-  stroke: var(--acc-input);
-  stroke-opacity: 0.8;
+  stroke-opacity: 1;
   stroke-linecap: round;
   pointer-events: none;
   filter: 
-    drop-shadow(0 0 6px rgba(96, 165, 250, 0.4))
+    drop-shadow(0 0 6px rgba(59, 130, 246, 0.4))
     drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
   transition: all 0.3s var(--ease-smooth);
 }
@@ -486,6 +556,68 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
 
 @media (prefers-reduced-motion: reduce) {
   .edge { animation: none; }
+}
+
+/* Enhanced connection feedback while connecting */
+:global(.canvas.connecting .pocket-note) {
+  outline: 2px dashed rgba(59, 130, 246, 0.2);
+  outline-offset: 4px;
+  transition: all 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+  border-color: rgba(59, 130, 246, 0.15);
+}
+
+:global(.canvas.connecting .pocket-note:hover) {
+  outline-color: rgba(59, 130, 246, 0.5);
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow: 
+    0 8px 32px rgba(59, 130, 246, 0.15),
+    0 4px 16px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px) scale(1.005);
+}
+
+:global(.canvas.connecting .pocket-note .input-port) {
+  opacity: 1 !important;
+  transform: translateY(-50%) scale(1.2);
+  box-shadow: 
+    0 0 0 3px rgba(255,255,255,1),
+    0 0 20px rgba(16, 185, 129, 0.6),
+    0 6px 20px rgba(0, 0, 0, 0.25);
+  animation: pulsePort 1.5s ease-in-out infinite;
+}
+
+:global(.canvas.connecting .pocket-note:hover .input-port) {
+  transform: translateY(-50%) scale(1.4);
+  animation: fastPulsePort 0.8s ease-in-out infinite;
+}
+
+@keyframes pulsePort {
+  0%, 100% { 
+    box-shadow: 
+      0 0 0 3px rgba(255,255,255,1),
+      0 0 20px rgba(16, 185, 129, 0.6),
+      0 6px 20px rgba(0, 0, 0, 0.25);
+  }
+  50% { 
+    box-shadow: 
+      0 0 0 3px rgba(255,255,255,1),
+      0 0 25px rgba(16, 185, 129, 0.8),
+      0 6px 20px rgba(0, 0, 0, 0.25);
+  }
+}
+
+@keyframes fastPulsePort {
+  0%, 100% { 
+    box-shadow: 
+      0 0 0 4px rgba(255,255,255,1),
+      0 0 30px rgba(16, 185, 129, 0.9),
+      0 8px 24px rgba(0, 0, 0, 0.3);
+  }
+  50% { 
+    box-shadow: 
+      0 0 0 4px rgba(255,255,255,1),
+      0 0 35px rgba(16, 185, 129, 1),
+      0 8px 24px rgba(0, 0, 0, 0.3);
+  }
 }
 
 /* Controls and minimap styles removed */

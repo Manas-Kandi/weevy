@@ -535,7 +535,6 @@
 		aria-label="Input connection area"
 		tabindex="-1"
 	>
-		<!-- Always show for debugging -->
 		<div 
 			class="connection-port input-port"
 			on:mousedown={handleInputPortMouseDown}
@@ -671,16 +670,18 @@
 						</label>
 					</div>
 				{:else if inputType === 'button'}
-					<button class="interactive-button" on:click={handleButtonClick} on:mousedown|stopPropagation>
-						{inputValue || 'Click Me'}
-					</button>
-					<input
-						type="text"
-						class="button-label-input"
-						placeholder="Button label..."
-						bind:value={inputValue}
-						on:mousedown|stopPropagation
-					/>
+					<div class="button-container">
+						<button class="interactive-button" on:click={handleButtonClick} on:mousedown|stopPropagation>
+							{inputValue || 'Click Me'}
+						</button>
+						<input
+							type="text"
+							class="button-label-input"
+							placeholder="Button label..."
+							bind:value={inputValue}
+							on:mousedown|stopPropagation
+						/>
+					</div>
 				{:else if inputType === 'form'}
 					<div class="form-container">
 						{#each formFields as field, i}
@@ -797,7 +798,6 @@
 		aria-label="Output connection area"
 		tabindex="-1"
 	>
-		<!-- Always show for debugging -->
 		<div 
 			class="connection-port output-port"
 			on:mousedown={handleOutputPortMouseDown}
@@ -843,7 +843,8 @@
 			0 1px 2px rgba(0, 0, 0, 0.02);
 		cursor: pointer;
 		transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
-		overflow: hidden;
+		/* Ensure connector ports that extend beyond the card edges remain visible */
+		overflow: visible;
 	}
 
 	/* Allow dropdown to overflow when autocomplete is open */
@@ -958,9 +959,8 @@
 		top: 50%;
 		transform: translateY(-50%);
 		z-index: 998;
-		/* Invisible hover zone */
-		/* Debug: make visible */
-		background: rgba(255, 0, 0, 0.1);
+		/* Invisible hover zone (no debug background) */
+		background: transparent;
 	}
 
 	.input-zone {
@@ -973,37 +973,87 @@
 
 	.connection-port {
 		position: absolute;
-		width: 18px;
-		height: 18px;
+		width: 20px;
+		height: 20px;
 		border-radius: 50%;
 		cursor: pointer;
 		top: 50%;
 		transform: translateY(-50%);
 		z-index: 9999;
-		box-shadow: 0 3px 12px rgba(0, 0, 0, 0.4);
-		transition: all 0.2s ease;
-		opacity: 0.9;
+		box-shadow: 
+			0 4px 12px rgba(0, 0, 0, 0.3),
+			0 0 0 2px rgba(255, 255, 255, 1);
+		transition: all 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+		opacity: 0.6; /* Subtle visibility by default */
 		pointer-events: all;
 	}
 
+	/* Show ports clearly when hovering a node or dragging a connection from it */
+	.pocket-note.hovering .connection-port,
+	.pocket-note.dragging-connection .connection-port,
+	.pocket-note.selected .connection-port {
+		opacity: 1;
+		transform: translateY(-50%) scale(1.1);
+	}
+
 	.input-port {
-		left: -8px;
-		background: #10B981;
-		border: 3px solid white;
+		left: -10px;
+		background: linear-gradient(135deg, #10B981, #059669);
+		position: relative;
+	}
+
+	.input-port::after {
+		content: '';
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		width: 8px;
+		height: 8px;
+		background: rgba(255, 255, 255, 0.9);
+		border-radius: 50%;
+		transform: translate(-50%, -50%);
+		transition: all 0.2s ease;
 	}
 
 	.output-port {
-		right: -8px;
-		background: #3B82F6;
-		border: 3px solid white;
+		right: -10px;
+		background: linear-gradient(135deg, #3B82F6, #2563EB);
+		position: relative;
+	}
+
+	.output-port::after {
+		content: '';
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		width: 0;
+		height: 0;
+		border-left: 4px solid rgba(255, 255, 255, 0.9);
+		border-top: 3px solid transparent;
+		border-bottom: 3px solid transparent;
+		transform: translate(-30%, -50%);
+		transition: all 0.2s ease;
 	}
 
 	.connection-port:hover {
-		transform: translateY(-50%) scale(1.4);
+		transform: translateY(-50%) scale(1.3);
 		box-shadow: 
-			0 6px 20px rgba(0, 0, 0, 0.25),
-			0 0 0 3px rgba(255, 255, 255, 1) inset,
-			0 0 16px color-mix(in oklch, var(--accent-color) 30%, transparent);
+			0 6px 20px rgba(0, 0, 0, 0.4),
+			0 0 0 3px rgba(255, 255, 255, 1),
+			0 0 16px color-mix(in oklch, var(--accent-color) 40%, transparent);
+	}
+
+	.input-port:hover::after {
+		width: 10px;
+		height: 10px;
+		background: rgba(255, 255, 255, 1);
+	}
+
+	.output-port:hover::after {
+		border-left-width: 5px;
+		border-top-width: 4px;
+		border-bottom-width: 4px;
+		border-left-color: rgba(255, 255, 255, 1);
 	}
 
 	/* Node type specific hover animations */
@@ -1277,22 +1327,23 @@
 	.input-node-container {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: 6px;
 		width: 100%;
-		min-height: 160px;
-		max-height: 200px;
+		height: 176px; /* Fixed height to match other nodes' content area */
 	}
 
 	.input-area {
 		flex: 1;
 		position: relative;
-		margin-bottom: 4px;
+		display: flex;
+		flex-direction: column;
 	}
 
 	.interactive-input {
 		width: 100%;
-		height: 80px;
-		padding: 10px 12px;
+		flex: 1;
+		min-height: 100px;
+		padding: 12px;
 		border: 2px solid rgba(0, 0, 0, 0.08);
 		border-radius: 8px;
 		background: rgba(255, 255, 255, 0.9);
@@ -1314,7 +1365,8 @@
 	.file-upload-zone {
 		position: relative;
 		width: 100%;
-		height: 100px;
+		flex: 1;
+		min-height: 100px;
 		border: 2px dashed rgba(0, 0, 0, 0.2);
 		border-radius: 8px;
 		background: rgba(255, 255, 255, 0.5);
@@ -1385,6 +1437,15 @@
 		text-overflow: ellipsis;
 	}
 
+	.button-container {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		flex: 1;
+		min-height: 100px;
+		justify-content: center;
+	}
+
 	.interactive-button {
 		width: 100%;
 		padding: 12px 24px;
@@ -1406,7 +1467,6 @@
 
 	.button-label-input {
 		width: 100%;
-		margin-top: 6px;
 		padding: 6px 8px;
 		border: 1px solid rgba(0, 0, 0, 0.08);
 		border-radius: 6px;
@@ -1425,12 +1485,14 @@
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
+		flex: 1;
+		min-height: 100px;
 	}
 
 	.form-field {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 3px;
 	}
 
 	.form-label {
@@ -1462,6 +1524,8 @@
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
+		flex: 1;
+		min-height: 100px;
 	}
 
 	.choice-option {
@@ -1487,8 +1551,8 @@
 
 	.type-selector-container {
 		position: relative;
-		align-self: flex-end;
-		margin-top: 0;
+		align-self: flex-start;
+		margin-top: 4px;
 	}
 
 	.type-selector {
@@ -1552,7 +1616,8 @@
 		border-radius: 6px;
 		background: color-mix(in oklch, var(--accent-color) 5%, white);
 		border: 1px solid color-mix(in oklch, var(--accent-color) 20%, transparent);
-		margin-top: 4px;
+		margin-top: 6px;
+		flex-shrink: 0;
 	}
 
 	.test-data-label {
