@@ -254,6 +254,26 @@ function handleMouseUp() {
  const canvasX = (startPoint.x - rect.left - offsetX) / scale;
  const canvasY = (startPoint.y - rect.top - offsetY) / scale;
  
+ // Get the actual node position for better connection points
+ const nodeElement = document.querySelector(`[data-node-id="${nodeId}"]`);
+ if (nodeElement) {
+  const nodeRect = nodeElement.getBoundingClientRect();
+  const portX = port === 'output' ? nodeRect.right : nodeRect.left;
+  const portY = nodeRect.top + nodeRect.height / 2;
+  
+  const portCanvasX = (portX - rect.left - offsetX) / scale;
+  const portCanvasY = (portY - rect.top - offsetY) / scale;
+  
+  dragConnectionPreview = {
+   startX: portCanvasX,
+   startY: portCanvasY,
+   endX: portCanvasX,
+   endY: portCanvasY
+  };
+  return;
+ }
+ 
+ // Fallback to click position if node not found
  dragConnectionPreview = {
   startX: canvasX,
   startY: canvasY,
@@ -267,16 +287,38 @@ function handleConnectionDrag(event: CustomEvent<{ nodeId: string; startPoint: {
  
  const { currentPoint } = event.detail;
  const rect = canvasElement.getBoundingClientRect();
+ 
+ // Convert to canvas coordinates
  const canvasX = (currentPoint.x - rect.left - offsetX) / scale;
  const canvasY = (currentPoint.y - rect.top - offsetY) / scale;
  
+ // Update the preview line
  dragConnectionPreview.endX = canvasX;
  dragConnectionPreview.endY = canvasY;
- dragConnectionPreview = { ...dragConnectionPreview }; // Trigger reactivity
+ 
+ // Trigger reactivity with a new object
+ dragConnectionPreview = { ...dragConnectionPreview };
+ 
+ // Highlight potential drop targets
+ const elements = document.elementsFromPoint(currentPoint.x, currentPoint.y);
+ const targetPort = elements.find(el => el.classList?.contains('input-port'));
+ const targetNode = targetPort?.closest('.pocket-note');
+ 
+ // Update hover state for visual feedback
+ document.querySelectorAll('.pocket-note').forEach(node => {
+  node.classList.toggle('connection-target', node === targetNode);
+ });
 }
 
-function handleConnectionComplete(event: CustomEvent<{ fromNodeId: string; toNodeId: string; fromPort: string; toPort: string }>) {
- const { fromNodeId, toNodeId, fromPort, toPort } = event.detail;
+function handleConnectionComplete(event: CustomEvent<{ 
+ fromNodeId: string; 
+ toNodeId: string; 
+ fromPort: string; 
+ toPort: string;
+ startPoint?: { x: number; y: number };
+ endPoint?: { x: number; y: number };
+}>) {
+ const { fromNodeId, toNodeId, fromPort, toPort, startPoint, endPoint } = event.detail;
  
  // Prevent self-connections
  if (fromNodeId === toNodeId) {
@@ -291,6 +333,15 @@ function handleConnectionComplete(event: CustomEvent<{ fromNodeId: string; toNod
   return;
  }
  
+ // Get the actual node positions for the connection points
+ const fromNode = document.querySelector(`[data-node-id="${fromNodeId}"]`);
+ const toNode = document.querySelector(`[data-node-id="${toNodeId}"]`);
+ 
+ if (!fromNode || !toNode) {
+  handleConnectionCancel({ detail: { nodeId: fromNodeId } });
+  return;
+ }
+ 
  // Create connection between nodes with port references
  connections.set(connectionId, {
   id: connectionId,
@@ -299,21 +350,29 @@ function handleConnectionComplete(event: CustomEvent<{ fromNodeId: string; toNod
   fromPort: fromPort,
   toPort: toPort
  });
- connections = connections; // Trigger reactivity
+ 
+ // Trigger reactivity
+ connections = new Map(connections);
  
  // Clean up
+ resetConnectionState();
+}
+
+function resetConnectionState() {
+ // Reset all connection-related state
  isConnecting = false;
  connectionStart = null;
  connectionStartPort = null;
  dragConnectionPreview = null;
+ 
+ // Remove any hover states
+ document.querySelectorAll('.pocket-note').forEach(node => {
+  node.classList.remove('connection-target');
+ });
 }
 
 function handleConnectionCancel(event: CustomEvent<{ nodeId: string }>) {
- // Clean up cancelled connection
- isConnecting = false;
- connectionStart = null;
- connectionStartPort = null;
- dragConnectionPreview = null;
+ resetConnectionState();
 }
 
 
@@ -388,27 +447,38 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
           class="edge" 
           class:selected={isSelected}
           class:hovered={isHovered}
-          stroke="#3B82F6" 
-          stroke-width={isSelected || isHovered ? "4" : "3"}
-          opacity={isSelected || isHovered ? "1" : "0.8"}
-          d={`M ${startCoords.x} ${startCoords.y} C ${startCoords.x + controlOffset} ${startCoords.y}, ${endCoords.x - controlOffset} ${endCoords.y}, ${endCoords.x} ${endCoords.y}`}
-          on:click={() => selectedConnectionId = connection.id}
+          stroke={isSelected ? "var(--acc-input)" : "var(--acc-input)"}
+          stroke-width={isSelected || isHovered ? 3 : 2}
+          opacity={isSelected ? 1 : 0.7}
+          d={`M ${startCoords.x} ${startCoords.y} 
+               C ${startCoords.x + controlOffset} ${startCoords.y}, 
+                 ${endCoords.x - controlOffset} ${endCoords.y}, 
+                 ${endCoords.x} ${endCoords.y}`}
+          on:click|stopPropagation={() => {
+            selectedConnectionId = connection.id;
+            selectedNodeId = null; // Deselect any selected node
+          }}
           on:mouseenter={() => hoveredConnectionId = connection.id}
           on:mouseleave={() => hoveredConnectionId = null}
           style="pointer-events: stroke; cursor: pointer;"
+          marker-end="url(#arrowhead)"
         />
       {/if}
     {/if}
    {/each}
    {#if dragConnectionPreview}
     <path 
-     class="edge preview" 
-     stroke="#3B82F6" 
-     stroke-width="3" 
-     stroke-dasharray="8,4" 
-     fill="none" 
-     opacity="0.8"
-     d={`M ${dragConnectionPreview.startX} ${dragConnectionPreview.startY} C ${dragConnectionPreview.startX + 60} ${dragConnectionPreview.startY}, ${dragConnectionPreview.endX - 60} ${dragConnectionPreview.endY}, ${dragConnectionPreview.endX} ${dragConnectionPreview.endY}`} 
+      class="connection-preview" 
+      stroke="var(--acc-input)" 
+      stroke-width="3" 
+      stroke-dasharray="8,4" 
+      fill="none" 
+      opacity="0.8"
+      d={`M ${dragConnectionPreview.startX} ${dragConnectionPreview.startY} 
+           C ${dragConnectionPreview.startX + 60} ${dragConnectionPreview.startY}, 
+             ${dragConnectionPreview.endX - 60} ${dragConnectionPreview.endY}, 
+             ${dragConnectionPreview.endX} ${dragConnectionPreview.endY}`} 
+      marker-end="url(#arrowhead)"
     />
    {/if}
    <defs>
@@ -503,14 +573,38 @@ function handleNodeStartDrag(event: CustomEvent<{ nodeId: string; event: MouseEv
 
 .edge {
   fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: stroke;
+  transition: all 0.2s ease;
+}
+
+.edge:hover, .edge.hovered {
   stroke-width: 3;
   stroke-opacity: 1;
-  stroke-linecap: round;
+  filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.5));
+}
+
+.edge.selected {
+  stroke-width: 3;
+  stroke-opacity: 1;
+  stroke: var(--acc-input);
+  filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.6));
+}
+
+.connection-preview {
+  stroke: var(--acc-input);
+  stroke-width: 2;
+  stroke-dasharray: 5, 3;
+  fill: none;
   pointer-events: none;
-  filter: 
-    drop-shadow(0 0 6px rgba(59, 130, 246, 0.4))
-    drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
-  transition: all 0.3s var(--ease-smooth);
+  opacity: 0.8;
+}
+
+.connection-target {
+  outline: 2px dashed rgba(59, 130, 246, 0.5);
+  outline-offset: 2px;
+  border-radius: 24px;
 }
 
 .edge.brain { 

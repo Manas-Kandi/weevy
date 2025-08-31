@@ -1,17 +1,5 @@
 <script lang="ts">
 	import { createEventDispatcher, tick, onMount, onDestroy } from 'svelte';
-	
-	function handleKeyDown(e: KeyboardEvent) {
-	  if (e.key === 'Enter' || e.key === ' ') {
-	    e.preventDefault();
-	    const clickEvent = new MouseEvent('click');
-    	if (handleClick) handleClick(clickEvent);
-	  } else if (e.key === 'Delete') {
-	    e.preventDefault();
-	    const mouseEvent = new MouseEvent('click');
-    	if (handleDeleteClick) handleDeleteClick(mouseEvent);
-	  }
-	}
 	import type { Node } from './types';
 	import { Brain, FileInput, FileOutput, BookOpen, Wrench, Sparkles, Zap, Database } from 'lucide-svelte';
 	import { scale, fly } from 'svelte/transition';
@@ -609,11 +597,21 @@
 	on:mousedown={handleMouseDown}
 	on:mouseenter={() => hovering = true}
 	on:mouseleave={() => hovering = false}
-	on:keydown|stopPropagation={handleKeyDown}
+	on:keydown|stopPropagation={(e) => {
+	  if (e.key === 'Enter' || e.key === ' ') {
+	    e.preventDefault();
+	    handleClick(e);
+	  } else if (e.key === 'Delete') {
+	    e.preventDefault();
+	    handleDeleteClick(e as unknown as MouseEvent);
+	  }
+	}}
 	role="button"
 	tabindex="0"
-	aria-label={`${nodeTypeLabels[node.type] || node.type} node: ${node.data?.label || 'Untitled'}`}
+	aria-label={`${node.type} node: ${node.data?.label || 'Untitled'}`}
 	aria-pressed={selected}
+	aria-label="{nodeTypeLabels[node.type]} {node.data.label}"
+	tabindex="0"
 	in:scale={{ duration: 600, easing: elasticOut, start: 0.8 }}
 >
 	<!-- Input Port Area - left edge hover zone -->
