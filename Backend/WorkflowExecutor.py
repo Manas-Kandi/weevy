@@ -1,20 +1,19 @@
-
 import asyncio
 import uuid
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 import logging
 
-from BrainNode import BrainNode
-from InputNode import InputNode
-from OutputNode import OutputNode
-from KnowledgeBaseNode import KnowledgeBaseNode
-from ToolNode import ToolNode
-from GeneralNodeLogic import NodeInputs, WorkflowMemory, PreviousNodeOutput
-from WorkflowInputProcessor import WorkflowInputProcessor, ProcessingMode
-from ToolOrchestrator import ToolOrchestrator
+from Backend.BrainNode import BrainNode
+from Backend.InputNode import InputNode
+from Backend.OutputNode import OutputNode
+from Backend.KnowledgeBaseNode import KnowledgeBaseNode
+from Backend.ToolNode import ToolNode
+from Backend.GeneralNodeLogic import NodeInputs, WorkflowMemory, PreviousNodeOutput
+from Backend.WorkflowInputProcessor import WorkflowInputProcessor, ProcessingMode
+from Backend.ToolOrchestrator import ToolOrchestrator
 from sqlalchemy.ext.asyncio import AsyncSession
-from database.models import WorkflowExecution
+from Backend.database.models import WorkflowExecution
 
 # Support both canonical short types and class-like names
 NODE_CLASSES = {

@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+python-dotenv
+sqlalchemy
+pydantic
+httpx
+websockets
+langchain
+langchain-community
+sentence-transformers
+chromadb
+numpy
+pytest
+pytest-asyncio

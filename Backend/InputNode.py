@@ -5,7 +5,7 @@ Handles user input collection and preprocessing for the workflow system.
 """
 
 from typing import Dict, Any, List
-from GeneralNodeLogic import GeneralNodeLogic, NodeInputs, NodeOutput, PreviousNodeOutput, WorkflowMemory
+from Backend.GeneralNodeLogic import GeneralNodeLogic, NodeInputs, NodeOutput, PreviousNodeOutput, WorkflowMemory
 
 class InputNode(GeneralNodeLogic):
     """

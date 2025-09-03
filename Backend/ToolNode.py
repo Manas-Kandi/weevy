@@ -1,7 +1,7 @@
 from typing import Dict, Any, List
 from dataclasses import dataclass
 from datetime import datetime
-from GeneralNodeLogic import GeneralNodeLogic, NodeOutput, PreviousNodeOutput, WorkflowMemory, NodeInputs
+from Backend.GeneralNodeLogic import GeneralNodeLogic, NodeOutput, PreviousNodeOutput, WorkflowMemory, NodeInputs
 
 @dataclass
 class ToolSpec:

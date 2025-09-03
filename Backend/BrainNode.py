@@ -14,7 +14,7 @@ from openai import OpenAI
 import asyncio
 import uuid
 
-from GeneralNodeLogic import (
+from Backend.GeneralNodeLogic import (
     GeneralNodeLogic, 
     NodeInputs, 
     NodeOutput, 
@@ -22,8 +22,8 @@ from GeneralNodeLogic import (
     WorkflowMemory,
     NodeExecutionMode
 )
-from ToolOrchestrator import ToolOrchestrator, ToolExecutionPlan, ToolExecutionResult
-from WorkflowInputProcessor import ProcessedNodeInput
+from Backend.ToolOrchestrator import ToolOrchestrator, ToolExecutionPlan, ToolExecutionResult
+from Backend.WorkflowInputProcessor import ProcessedNodeInput
 
 # Enhanced system rules with intelligent tool selection
 ENHANCED_BRAIN_NODE_SYSTEM_RULES = """

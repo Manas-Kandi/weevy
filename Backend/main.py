@@ -90,28 +90,28 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 # Import existing node classes
-from BrainNode import BrainNode
-from InputNode import InputNode
-from OutputNode import OutputNode
-from KnowledgeBaseNode import KnowledgeBaseNode
-from WorkflowExecutor import WorkflowExecutor
+from Backend.BrainNode import BrainNode
+from Backend.InputNode import InputNode
+from Backend.OutputNode import OutputNode
+from Backend.KnowledgeBaseNode import KnowledgeBaseNode
+from Backend.WorkflowExecutor import WorkflowExecutor
 
 # Import existing infrastructure
-from database.connection import init_db, close_db, db_health, AsyncSessionLocal
-from database.models import Project, WorkflowNode, NodeConnection, WorkflowExecution
-from api.projects import router as projects_router
-from api.nodes import router as nodes_router
-from api.executions import router as executions_router
-from api.billing import router as billing_router
-from llm.manager import LLMManager
-from llm.providers import OpenAIProvider, AnthropicProvider, GoogleProvider, NvidiaProvider
+from Backend.database.connection import init_db, close_db, db_health, AsyncSessionLocal
+from Backend.database.models import Project, WorkflowNode, NodeConnection, WorkflowExecution
+from Backend.api.projects import router as projects_router
+from Backend.api.nodes import router as nodes_router
+from Backend.api.executions import router as executions_router
+from Backend.api.billing import router as billing_router
+from Backend.llm.manager import LLMManager
+from Backend.llm.providers import OpenAIProvider, AnthropicProvider, GoogleProvider, NvidiaProvider
 
 # Import LangChain integration components
 try:
-    from langchain_integration import LangGraphManager, LangChainMemoryManager, ToolRegistry
-    from langchain_integration.nodes import LangChainBrainNode, RAGChainNode
-    from langchain_integration.vector_store import VectorStoreManager, VectorStoreConfig
-    from tools import WebSearchTool, DatabaseTool, APICallingTool
+    from Backend.langchain_integration import LangGraphManager, LangChainMemoryManager, ToolRegistry
+    from Backend.langchain_integration.nodes import LangChainBrainNode, RAGChainNode
+    from Backend.langchain_integration.vector_store import VectorStoreManager, VectorStoreConfig
+    from Backend.tools import WebSearchTool, DatabaseTool, APICallingTool
     LANGCHAIN_AVAILABLE = True
 except ImportError as e:
     logging.warning(f"LangChain components not available: {e}")
