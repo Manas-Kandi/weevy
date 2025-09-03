@@ -1,17 +1,5 @@
-<script lang="ts">
-	import { createEventDispatcher, tick, onMount, onDestroy } from 'svelte';
-	
-	function handleKeyDown(e: KeyboardEvent) {
-	  if (e.key === 'Enter' || e.key === ' ') {
-	    e.preventDefault();
-	    const clickEvent = new MouseEvent('click');
-    	if (handleClick) handleClick(clickEvent);
-	  } else if (e.key === 'Delete') {
-	    e.preventDefault();
-	    const mouseEvent = new MouseEvent('click');
-    	if (handleDeleteClick) handleDeleteClick(mouseEvent);
-	  }
-	}
+'''<script lang="ts">
+	import { createEventDispatcher, tick, onMount } from 'svelte';
 	import type { Node } from './types';
 	import { Brain, FileInput, FileOutput, BookOpen, Wrench, Sparkles, Zap, Database } from 'lucide-svelte';
 	import { scale, fly } from 'svelte/transition';
@@ -51,34 +39,10 @@
 
 	const dispatch = createEventDispatcher<{
 		select: void;
-		connectionStart: { 
-			nodeId: string; 
-			port: 'output'; 
-			startPoint: { x: number; y: number } 
-		};
-		connectionTarget: { 
-			nodeId: string; 
-			port: 'input';
-			portRect?: {
-				x: number;
-				y: number;
-				width: number;
-				height: number;
-			};
-		};
-		connectionDrag: { 
-			nodeId: string; 
-			startPoint: { x: number; y: number }; 
-			currentPoint: { x: number; y: number } 
-		};
-		connectionComplete: { 
-			fromNodeId: string; 
-			toNodeId: string; 
-			fromPort: string; 
-			toPort: string;
-			startPoint?: { x: number; y: number };
-			endPoint?: { x: number; y: number };
-		};
+		connectionStart: { nodeId: string; port: 'output'; startPoint: { x: number; y: number } };
+		connectionTarget: { nodeId: string; port: 'input' };
+		connectionDrag: { nodeId: string; startPoint: { x: number; y: number }; currentPoint: { x: number; y: number } };
+		connectionComplete: { fromNodeId: string; toNodeId: string; fromPort: string; toPort: string };
 		connectionCancel: { nodeId: string };
 		nodestartdrag: { nodeId: string; event: MouseEvent };
 		delete: { nodeId: string };
@@ -335,106 +299,57 @@
 		e.stopPropagation();
 		e.preventDefault();
 		
-		// Get the port element's position
-		const portElement = e.currentTarget as HTMLElement;
-		const portRect = portElement.getBoundingClientRect();
-		
 		isDraggingConnection = true;
+		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
 		connectionStartPoint = {
-			x: portRect.left + portRect.width / 2,
-			y: portRect.top + portRect.height / 2
+			x: rect.left + rect.width / 2,
+			y: rect.top + rect.height / 2
 		};
 		connectionCurrentPoint = { ...connectionStartPoint };
 		
-		dispatch('connectionStart', { 
-			nodeId: node.id, 
-			port: 'output', 
-			startPoint: connectionStartPoint 
-		});
+		dispatch('connectionStart', { nodeId: node.id, port: 'output', startPoint: connectionStartPoint });
 		
-		// Add global mouse listeners with passive: true for better performance
-		const options = { passive: true };
-		document.addEventListener('mousemove', handleConnectionDrag, options);
-		document.addEventListener('mouseup', handleConnectionEnd, options);
-		
-		// Add escape key handler to cancel connection
-		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.key === 'Escape' || e.key === 'Esc') {
-				dispatch('connectionCancel', { nodeId: node.id });
-				cleanup();
-			}
-		};
-		
-		const cleanup = () => {
-			isDraggingConnection = false;
-			connectionStartPoint = null;
-			connectionCurrentPoint = null;
-			document.removeEventListener('mousemove', handleConnectionDrag);
-			document.removeEventListener('mouseup', handleConnectionEnd);
-			document.removeEventListener('keydown', handleKeyDown);
-		};
-		
-		document.addEventListener('keydown', handleKeyDown);
-		
-		// Clean up on node unmount
-		onDestroy(cleanup);
+		// Add global mouse listeners
+		document.addEventListener('mousemove', handleConnectionDrag);
+		document.addEventListener('mouseup', handleConnectionEnd);
 	}
 
 	function handleInputPortMouseDown(e: MouseEvent) {
 		e.stopPropagation();
 		e.preventDefault();
 		
-		// Get the port element's position
-		const portElement = e.currentTarget as HTMLElement;
-		const portRect = portElement.getBoundingClientRect();
-		
-		dispatch('connectionTarget', { 
-			nodeId: node.id, 
-			port: 'input',
-			portRect: {
-				x: portRect.left + portRect.width / 2,
-				y: portRect.top + portRect.height / 2,
-				width: portRect.width,
-				height: portRect.height
-			}
-		});
+		// Input ports are targets, not sources, so we dispatch a different event
+		dispatch('connectionTarget', { nodeId: node.id, port: 'input' });
 	}
 	
 	function handleConnectionDrag(e: MouseEvent) {
 		if (!isDraggingConnection || !connectionStartPoint) return;
 		
-		// Update the current point to follow the mouse
 		connectionCurrentPoint = {
 			x: e.clientX,
 			y: e.clientY
 		};
 		
-		// Dispatch the drag event with current positions
 		dispatch('connectionDrag', { 
-			nodeId: node.id,
-			startPoint: connectionStartPoint,
-			currentPoint: connectionCurrentPoint
+			nodeId: node.id, 
+			startPoint: connectionStartPoint, 
+			currentPoint: connectionCurrentPoint 
 		});
 	}
 	
 	function handleConnectionEnd(e: MouseEvent) {
 		if (!isDraggingConnection) return;
 		
-		// Clean up dragging state
 		isDraggingConnection = false;
-		
-		// Check if we're over a valid connection target
-		const elements = document.elementsFromPoint(e.clientX, e.clientY);
-		const targetPort = elements.find(el => el.classList?.contains('input-port'));
-		const targetNode = targetPort?.closest('.pocket-note');
-		const sourceNode = document.querySelector(`[data-node-id="${node.id}"]`);
-		
-		// Clean up the preview
-		const startPoint = connectionStartPoint;
 		connectionStartPoint = null;
 		connectionCurrentPoint = null;
 		
-		// If we have a valid target node that's not the source node
+		// Check if we're over a valid connection target
+		const elementUnderMouse = document.elementFromPoint(e.clientX, e.clientY);
+		const targetPort = elementUnderMouse?.closest('.input-port');
+		const targetNode = targetPort?.closest('.pocket-note');
+		const sourceNode = document.querySelector(`[data-node-id="${node.id}"]`);
+		
 		if (targetNode && targetNode !== sourceNode && targetPort) {
 			const targetNodeId = targetNode.getAttribute('data-node-id');
 			if (targetNodeId) {
@@ -450,13 +365,9 @@
 			dispatch('connectionCancel', { nodeId: node.id });
 		}
 		
-		// Clean up event listeners
-		const cleanup = () => {
-			document.removeEventListener('mousemove', handleConnectionDrag);
-			document.removeEventListener('mouseup', handleConnectionEnd);
-			document.removeEventListener('mouseup', cleanup);
-		};
-		document.addEventListener('mouseup', cleanup, { once: true });
+		// Remove global listeners
+		document.removeEventListener('mousemove', handleConnectionDrag);
+		document.removeEventListener('mouseup', handleConnectionEnd);
 	}
 
 	function handleDeleteClick(e: MouseEvent) {
@@ -609,11 +520,10 @@
 	on:mousedown={handleMouseDown}
 	on:mouseenter={() => hovering = true}
 	on:mouseleave={() => hovering = false}
-	on:keydown|stopPropagation={handleKeyDown}
 	role="button"
-	tabindex="0"
-	aria-label={`${nodeTypeLabels[node.type] || node.type} node: ${node.data?.label || 'Untitled'}`}
 	aria-pressed={selected}
+	aria-label="{nodeTypeLabels[node.type]} {node.data.label}"
+	tabindex="0"
 	in:scale={{ duration: 600, easing: elasticOut, start: 0.8 }}
 >
 	<!-- Input Port Area - left edge hover zone -->
@@ -632,38 +542,6 @@
 			role="button"
 			aria-label="Connect to this node"
 			tabindex="0"
-		></div>
-	</div>
-
-	<!-- Output Port Area - right edge hover zone -->
-	<div 
-		class="port-hover-zone output-zone"
-		on:mouseenter={() => showOutputPort = true}
-		on:mouseleave={() => showOutputPort = false}
-		role="button"
-		aria-label="Output connection area"
-		tabindex="-1"
-	>
-		<div 
-			class="connection-port output-port" 
-			on:mousedown={handleOutputPortMouseDown}
-			on:click|stopPropagation
-			on:keydown|stopPropagation={(e) => {
-  if (e.key === 'Enter') {
-    const mouseEvent = new MouseEvent('mousedown', {
-      view: window,
-      bubbles: true,
-      cancelable: true,
-      clientX: 0,
-      clientY: 0
-    });
-    handleOutputPortMouseDown(mouseEvent);
-  }
-}}
-			role="button"
-			tabindex="0"
-			title="Connect to another node (click and drag to connect)"
-			aria-label="Output connection port"
 		></div>
 	</div>
 
@@ -716,12 +594,7 @@
 						on:blur={handleAppBlur}
 					/>
 					{#if showAppAutocomplete && filteredApps.length > 0}
-						<div 
-  class="autocomplete-dropdown" 
-  on:click|stopPropagation
-  role="listbox"
-  aria-label="App suggestions"
->
+						<div class="autocomplete-dropdown" on:click|stopPropagation>
 							{#each filteredApps as app, index}
 								<button 
 									type="button"
@@ -1081,43 +954,52 @@
 
 	.port-hover-zone {
 		position: absolute;
-		top: 0;
-		bottom: 0;
-		width: 20px;
+		width: 30px;
+		height: 60px;
+		top: 50%;
+		transform: translateY(-50%);
 		z-index: 998;
+		/* Invisible hover zone (no debug background) */
+		background: transparent;
 	}
 
 	.input-zone {
-		left: -10px;
+		left: -15px;
 	}
 
 	.output-zone {
-		right: -10px;
+		right: -15px;
 	}
 
 	.connection-port {
 		position: absolute;
-		width: 16px;
-		height: 16px;
+		width: 20px;
+		height: 20px;
 		border-radius: 50%;
 		cursor: pointer;
 		top: 50%;
 		transform: translateY(-50%);
 		z-index: 9999;
-		border: 2px solid white;
-		transition: all 0.2s ease;
-		opacity: 0.5;
+		box-shadow: 
+			0 4px 12px rgba(0, 0, 0, 0.3),
+			0 0 0 2px rgba(255, 255, 255, 1);
+		transition: all 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+		opacity: 0.6; /* Subtle visibility by default */
+		pointer-events: all;
 	}
 
-	/* Show ports when node is hovered or selected */
-	.pocket-note:hover .connection-port,
+	/* Show ports clearly when hovering a node or dragging a connection from it */
+	.pocket-note.hovering .connection-port,
+	.pocket-note.dragging-connection .connection-port,
 	.pocket-note.selected .connection-port {
-		transform: translateY(-50%) scale(1.2);
+		opacity: 1;
+		transform: translateY(-50%) scale(1.1);
 	}
 
 	.input-port {
-		left: -8px;
-		background: #10B981;
+		left: -10px;
+		background: linear-gradient(135deg, #10B981, #059669);
+		position: relative;
 	}
 
 	.input-port::after {
@@ -1125,16 +1007,18 @@
 		position: absolute;
 		top: 50%;
 		left: 50%;
-		width: 6px;
-		height: 6px;
-		background: white;
+		width: 8px;
+		height: 8px;
+		background: rgba(255, 255, 255, 0.9);
 		border-radius: 50%;
 		transform: translate(-50%, -50%);
+		transition: all 0.2s ease;
 	}
 
 	.output-port {
-		right: -8px;
-		background: #3B82F6;
+		right: -10px;
+		background: linear-gradient(135deg, #3B82F6, #2563EB);
+		position: relative;
 	}
 
 	.output-port::after {
@@ -1144,19 +1028,32 @@
 		left: 50%;
 		width: 0;
 		height: 0;
-		border-left: 5px solid white;
+		border-left: 4px solid rgba(255, 255, 255, 0.9);
 		border-top: 3px solid transparent;
 		border-bottom: 3px solid transparent;
-		transform: translate(-50%, -50%);
+		transform: translate(-30%, -50%);
+		transition: all 0.2s ease;
 	}
 
 	.connection-port:hover {
-		transform: translateY(-50%) scale(1.4);
-		box-shadow: 0 0 0 2px white, 0 0 0 4px currentColor;
+		transform: translateY(-50%) scale(1.3);
+		box-shadow: 
+			0 6px 20px rgba(0, 0, 0, 0.4),
+			0 0 0 3px rgba(255, 255, 255, 1),
+			0 0 16px color-mix(in oklch, var(--accent-color) 40%, transparent);
 	}
 
-	.connection-port:active {
-		transform: translateY(-50%) scale(1.3);
+	.input-port:hover::after {
+		width: 10px;
+		height: 10px;
+		background: rgba(255, 255, 255, 1);
+	}
+
+	.output-port:hover::after {
+		border-left-width: 5px;
+		border-top-width: 4px;
+		border-bottom-width: 4px;
+		border-left-color: rgba(255, 255, 255, 1);
 	}
 
 	/* Node type specific hover animations */

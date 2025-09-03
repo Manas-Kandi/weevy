@@ -1,13 +1,14 @@
 """
-Brain Node Module
+Enhanced Brain Node Module
 
-Central reasoning node that coordinates other nodes and decides workflow actions.
+Central reasoning node with intelligent tool selection and workflow orchestration.
+Integrates with ToolOrchestrator for dynamic tool execution and decision making.
 """
 
 import os
 import json
 import logging
-from typing import Dict, List, Any, Optional, AsyncGenerator, Callable
+from typing import Dict, List, Any, Optional, AsyncGenerator, Callable, Set
 from datetime import datetime
 from openai import OpenAI
 import asyncio
@@ -21,33 +22,93 @@ from GeneralNodeLogic import (
     WorkflowMemory,
     NodeExecutionMode
 )
+from ToolOrchestrator import ToolOrchestrator, ToolExecutionPlan, ToolExecutionResult
+from WorkflowInputProcessor import ProcessedNodeInput
 
-# Expanded system rules
-BRAIN_NODE_SYSTEM_RULES = """
-You are a Brain Node in an AI agent workflow system.
-Your responsibilities:
-- Reason intelligently about the workflow and user goals.
-- Consider all available connected tools and their capabilities.
-- Use previous node outputs and memory context to guide decisions.
-- Always align actions with the user's configuration preferences.
-- Choose the best next step: which node/tool to invoke, in what order.
-- If multiple paths are possible, explain your reasoning.
-- Output in a structured, traceable format for testing/debugging.
+# Enhanced system rules with intelligent tool selection
+ENHANCED_BRAIN_NODE_SYSTEM_RULES = """
+You are an Enhanced AI Brain Node with intelligent tool selection capabilities.
+
+CORE RESPONSIBILITIES:
+1. INTELLIGENT REASONING: Analyze user requests with deep contextual understanding
+2. TOOL SELECTION: Select optimal tools based on capabilities, context, and user goals
+3. WORKFLOW ORCHESTRATION: Plan and execute complex multi-tool workflows
+4. CONTEXT AWARENESS: Maintain memory across interactions and leverage previous outputs
+5. DECISION EXPLANATION: Provide clear reasoning for all decisions and tool selections
+
+TOOL SELECTION CRITERIA:
+When multiple tools are available, evaluate based on:
+- RELEVANCE: How well the tool addresses the user's specific need
+- RELIABILITY: Tool's success rate and error handling capabilities  
+- EFFICIENCY: Execution time and resource requirements
+- DEPENDENCIES: Required inputs and prerequisites
+- OUTPUT QUALITY: Expected result accuracy and completeness
+- COST: Resource utilization and API costs
+
+DECISION PROCESS:
+1. Parse user intent and context from previous nodes
+2. Identify required capabilities and constraints
+3. Evaluate available tools against selection criteria
+4. Plan execution order considering dependencies
+5. Generate structured output with reasoning
+
+OUTPUT FORMAT:
+Always respond with a JSON structure containing:
+{
+  "reasoning": "Step-by-step analysis of the user request and tool selection logic",
+  "selected_tools": ["tool1", "tool2", ...],
+  "execution_plan": {
+    "tool1": {"action": "action_name", "parameters": {...}, "priority": 1},
+    "tool2": {"action": "action_name", "parameters": {...}, "priority": 2}
+  },
+  "dependencies": {"tool2": ["tool1"]},
+  "expected_outcome": "Description of expected workflow result",
+  "confidence": 0.85,
+  "fallback_options": ["alternative_approach_if_primary_fails"]
+}
+
+CONTEXT INTEGRATION:
+- Leverage workflow memory for personalization
+- Consider previous node outputs for data flow
+- Maintain conversation continuity
+- Adapt tool selection based on execution history
 """
 
 class BrainNode(GeneralNodeLogic):
     """
-    Brain Node - Central coordinator for the node system.
-    Enhanced with NVIDIA API integration, dynamic prompt construction,
-    reasoning capabilities, and tool suggestion.
+    Enhanced Brain Node - Central coordinator with intelligent tool selection.
+    
+    Features:
+    - Intelligent tool selection based on context and capabilities
+    - Dynamic workflow orchestration using ToolOrchestrator
+    - Enhanced reasoning with structured decision making
+    - Context-aware tool parameter optimization
+    - Multi-tool execution planning and coordination
     """
-    def __init__(self, node_id: str, name: str, execution_mode: NodeExecutionMode = NodeExecutionMode.PRODUCTION):
+    def __init__(self, 
+                 node_id: str, 
+                 name: str, 
+                 execution_mode: NodeExecutionMode = NodeExecutionMode.PRODUCTION,
+                 available_tools: Optional[Dict[str, Any]] = None,
+                 tool_orchestrator: Optional[ToolOrchestrator] = None):
         super().__init__(execution_mode)
         self.node_id = node_id
         self.name = name
         self.connected_nodes: List[Any] = []
-        self.processing_strategy: str = "sequential"
-        self.context_memory: Dict[str, Any] = {}  # persists context across runs
+        self.connected_tools: Dict[str, Any] = available_tools or {}
+        self.processing_strategy: str = "intelligent"  # intelligent, sequential, parallel
+        self.context_memory: Dict[str, Any] = {}
+        
+        # Initialize tool orchestrator
+        if tool_orchestrator:
+            self.tool_orchestrator = tool_orchestrator
+        else:
+            self.tool_orchestrator = ToolOrchestrator(self.connected_tools) if self.connected_tools else None
+        
+        # Enhanced context tracking
+        self.decision_history: List[Dict[str, Any]] = []
+        self.tool_performance_cache: Dict[str, float] = {}
+        self.user_preferences: Dict[str, Any] = {}
         
         # Set up specific NVIDIA API client for BrainNode
         try:
@@ -57,7 +118,7 @@ class BrainNode(GeneralNodeLogic):
                     api_key=api_key,
                     base_url='https://integrate.api.nvidia.com/v1',
                 )
-                self.logger.info("BrainNode NVIDIA API client initialized successfully")
+                self.logger.info("Enhanced BrainNode NVIDIA API client initialized successfully")
             else:
                 self.brain_llm = None
                 self.logger.info("No NVIDIA_API_KEY set; BrainNode will use LLMManager if available.")
@@ -73,76 +134,119 @@ class BrainNode(GeneralNodeLogic):
         streaming_callback: Optional[Callable[[str], None]] = None
     ) -> NodeOutput:
         """
-        Execute the Brain Node using GeneralNodeLogic with specific system rules.
-        Includes reasoning about connected nodes and persistence of context.
+        Execute the Enhanced Brain Node with intelligent tool selection and orchestration.
+        
+        Process:
+        1. Analyze user intent and context
+        2. Select optimal tools based on capabilities and requirements
+        3. Create execution plan using ToolOrchestrator
+        4. Execute selected tools if appropriate
+        5. Return structured decision and results
         """
         try:
-            # Start timing execution
             start_time = datetime.now()
-            self.logger.info(f"BrainNode execution started: {self.node_id}")
+            self.logger.info(f"Enhanced BrainNode execution started: {self.node_id}")
             
-            # Create NodeInputs with BrainNode-specific system rules
+            # Extract system instructions from user configuration
+            system_instructions = user_configuration.get('systemInstructions', '')
+            execution_mode = user_configuration.get('mode', 'reasoning')
+            
+            # Use custom system instructions if provided, otherwise use enhanced default
+            if system_instructions:
+                system_rules = f"{system_instructions}\n\n{ENHANCED_BRAIN_NODE_SYSTEM_RULES}"
+            else:
+                system_rules = ENHANCED_BRAIN_NODE_SYSTEM_RULES
+            
+            # Create enhanced NodeInputs
             inputs = NodeInputs(
-                system_rules=BRAIN_NODE_SYSTEM_RULES,
+                system_rules=system_rules,
                 user_configuration=user_configuration,
                 previous_node_data=previous_node_data,
                 workflow_memory=workflow_memory,
                 execution_context={
-                    "connected_nodes": [n.name for n in self.connected_nodes],
+                    "connected_nodes": [n.name if hasattr(n, 'name') else str(n) for n in self.connected_nodes],
+                    "available_tools": list(self.connected_tools.keys()),
                     "processing_strategy": self.processing_strategy,
-                    "context_memory": self.context_memory
+                    "context_memory": self.context_memory,
+                    "execution_mode": execution_mode,
+                    "tool_performance_cache": self.tool_performance_cache,
+                    "decision_history": self.decision_history[-5:],  # Last 5 decisions
+                    "user_preferences": self.user_preferences
                 }
             )
             
-            # Build dynamic prompt with enhanced brain-specific context
-            prompt = self._build_brain_prompt(inputs)
+            # Build enhanced prompt with tool capability information
+            prompt = self._build_enhanced_brain_prompt(inputs)
             
-            # Execute brain reasoning with LLM
-            result = await self._execute_reasoning(prompt, inputs)
+            # Execute reasoning to get tool selection and execution plan
+            reasoning_result = await self._execute_enhanced_reasoning(prompt, inputs, streaming_callback)
             
-            # Parse the result to extract structured reasoning and decision
-            parsed_result = self._parse_reasoning_result(result)
+            # Parse the structured reasoning result
+            parsed_result = self._parse_enhanced_reasoning_result(reasoning_result)
             
-            # Store important context for future executions
-            self._update_context_memory(parsed_result, inputs)
+            # Execute selected tools if tool orchestrator is available and tools were selected
+            tool_execution_results = []
+            if (self.tool_orchestrator and 
+                parsed_result.get('selected_tools') and 
+                self.processing_strategy != 'reasoning_only'):
+                
+                tool_execution_results = await self._execute_selected_tools(parsed_result, workflow_memory)
             
-            # Calculate confidence based on reasoning quality
-            confidence = self._calculate_decision_confidence(parsed_result)
+            # Update context memory and decision history
+            self._update_enhanced_context_memory(parsed_result, inputs, tool_execution_results)
             
-            # Determine next node suggestions based on reasoning
-            next_nodes = self._extract_next_node_suggestions(parsed_result)
+            # Calculate confidence based on reasoning quality and tool execution success
+            confidence = self._calculate_enhanced_confidence(parsed_result, tool_execution_results)
             
-            # Record any tool calls that were made or suggested
-            tool_calls = self._extract_tool_calls(parsed_result)
-            
-            # Update workflow memory with brain node's reasoning and decision
+            # Update workflow memory with enhanced context
             workflow_memory.global_context.update({
                 "last_brain_reasoning": parsed_result.get("reasoning", ""),
-                "last_brain_decision": parsed_result.get("decision", ""),
-                "last_next_node": parsed_result.get("next_node", "")
+                "selected_tools": parsed_result.get("selected_tools", []),
+                "execution_plan": parsed_result.get("execution_plan", {}),
+                "tool_execution_results": [r.tool_name for r in tool_execution_results if r.status.value == 'success'],
+                "brain_confidence": confidence,
+                "processing_strategy": self.processing_strategy
             })
             
             execution_time = (datetime.now() - start_time).total_seconds() * 1000
             
+            # Combine reasoning and tool execution results
+            combined_data = {
+                **parsed_result,
+                "tool_execution_results": [
+                    {
+                        "tool": r.tool_name,
+                        "status": r.status.value,
+                        "result": r.result_data,
+                        "execution_time": r.execution_time,
+                        "error": r.error_message
+                    } for r in tool_execution_results
+                ]
+            }
+            
             return NodeOutput(
                 node_id=self.node_id,
                 node_type="BrainNode",
-                data=parsed_result,  # Return the structured reasoning output
+                data=combined_data,
                 timestamp=datetime.now().timestamp(),
                 metadata={
                     "status": "success",
                     "execution_time_ms": execution_time,
-                    "model_used": self.model_config['model'],
-                    "reasoning_quality": self._assess_reasoning_quality(parsed_result),
-                    "workflow_stage": self._determine_workflow_stage(inputs)
+                    "model_used": getattr(self.model_config, 'model', 'nvidia-llama'),
+                    "reasoning_quality": self._assess_enhanced_reasoning_quality(parsed_result),
+                    "tools_executed": len(tool_execution_results),
+                    "tools_successful": len([r for r in tool_execution_results if r.status.value == 'success']),
+                    "processing_strategy": self.processing_strategy,
+                    "execution_mode": execution_mode
                 },
                 success=True,
-                next_suggested_nodes=next_nodes,
+                next_suggested_nodes=self._extract_next_node_suggestions(parsed_result),
                 confidence_score=confidence,
-                tool_calls_made=tool_calls,
+                tool_calls_made=self._extract_tool_calls_from_results(tool_execution_results),
                 memory_updates={
-                    "brain_reasoning": parsed_result.get("reasoning", ""),
-                    "decision_path": parsed_result.get("next_node", "")
+                    "enhanced_brain_reasoning": parsed_result.get("reasoning", ""),
+                    "tool_selection_rationale": parsed_result.get("tool_selection_rationale", ""),
+                    "execution_strategy": parsed_result.get("execution_strategy", "")
                 }
             )
             
@@ -182,6 +286,285 @@ class BrainNode(GeneralNodeLogic):
                 "capabilities": getattr(node, "capabilities", "unknown")
             }
         return status
+    
+    def connect_tool(self, tool_name: str, tool_instance: Any):
+        """Connect a tool to this brain node for intelligent selection."""
+        self.connected_tools[tool_name] = tool_instance
+        if self.tool_orchestrator:
+            self.tool_orchestrator.available_tools[tool_name] = tool_instance
+        else:
+            self.tool_orchestrator = ToolOrchestrator(self.connected_tools)
+    
+    def disconnect_tool(self, tool_name: str):
+        """Disconnect a tool from this brain node."""
+        if tool_name in self.connected_tools:
+            del self.connected_tools[tool_name]
+            if self.tool_orchestrator and tool_name in self.tool_orchestrator.available_tools:
+                del self.tool_orchestrator.available_tools[tool_name]
+        
+    def _build_enhanced_brain_prompt(self, inputs: NodeInputs) -> str:
+        """Build enhanced prompt with tool capability information and context."""
+        # Extract tool capabilities information
+        tool_capabilities = self._format_tool_capabilities()
+        
+        # Build context from previous nodes and workflow memory
+        workflow_context = self._build_workflow_context(inputs)
+        
+        # Get user request and intent
+        user_request = self._extract_user_request(inputs)
+        
+        prompt = f"""
+CURRENT WORKFLOW CONTEXT:
+{workflow_context}
+
+USER REQUEST:
+{user_request}
+
+AVAILABLE TOOLS AND CAPABILITIES:
+{tool_capabilities}
+
+PREVIOUS EXECUTION CONTEXT:
+Decision History: {self.decision_history[-3:] if self.decision_history else "None"}
+Tool Performance: {self.tool_performance_cache}
+
+TASK:
+Analyze the user request in the context of available tools and workflow state.
+Select the optimal tools and create an execution plan that best fulfills the user's intent.
+
+Remember to:
+1. Consider tool dependencies and execution order
+2. Evaluate tool reliability and performance history
+3. Optimize for both effectiveness and efficiency  
+4. Provide clear reasoning for your selections
+5. Include fallback options for critical paths
+
+Respond with the required JSON structure.
+"""
+        return prompt
+
+    def _format_tool_capabilities(self) -> str:
+        """Format tool capabilities for the prompt."""
+        if not self.tool_orchestrator:
+            return "No tools available"
+        
+        capabilities = []
+        for tool_name, capability in self.tool_orchestrator.tool_capabilities.items():
+            perf_info = self.tool_performance_cache.get(tool_name, "No history")
+            capabilities.append(f"""
+- {tool_name.upper()}:
+  Description: {capability.description}
+  Actions: {', '.join(capability.supported_actions)}
+  Reliability: {capability.reliability_score:.2f}
+  Est. Time: {capability.execution_time_estimate}s
+  Recent Performance: {perf_info}
+""")
+        
+        return "\n".join(capabilities) if capabilities else "No tool capabilities defined"
+
+    def _build_workflow_context(self, inputs: NodeInputs) -> str:
+        """Build workflow context from inputs and memory."""
+        context_parts = []
+        
+        # Add previous node outputs
+        if inputs.previous_node_data:
+            context_parts.append("PREVIOUS NODE OUTPUTS:")
+            for prev_output in inputs.previous_node_data[-3:]:  # Last 3 outputs
+                context_parts.append(f"- {prev_output.node_type}: {str(prev_output.data)[:200]}...")
+        
+        # Add workflow memory context
+        if inputs.workflow_memory.global_context:
+            context_parts.append("WORKFLOW MEMORY:")
+            for key, value in list(inputs.workflow_memory.global_context.items())[-5:]:
+                context_parts.append(f"- {key}: {str(value)[:100]}...")
+        
+        return "\n".join(context_parts) if context_parts else "No previous context"
+
+    def _extract_user_request(self, inputs: NodeInputs) -> str:
+        """Extract user request from various input sources."""
+        # Check user configuration for prompts
+        user_config = inputs.user_configuration
+        
+        # Look for user prompts in various forms
+        user_request_sources = [
+            user_config.get('prompt', ''),
+            user_config.get('user_prompt', ''),
+            user_config.get('systemInstructions', ''),
+            user_config.get('input_text', '')
+        ]
+        
+        # Get from previous node data
+        for prev_data in inputs.previous_node_data:
+            if hasattr(prev_data, 'data') and isinstance(prev_data.data, str):
+                user_request_sources.append(prev_data.data)
+        
+        # Return first non-empty request
+        for request in user_request_sources:
+            if request and request.strip():
+                return request.strip()
+        
+        return "No specific user request found. Analyze available context and suggest appropriate actions."
+
+    async def _execute_enhanced_reasoning(self, prompt: str, inputs: NodeInputs, streaming_callback: Optional[Callable[[str], None]] = None) -> str:
+        """Execute enhanced reasoning with the LLM."""
+        try:
+            # Use enhanced system rules and execute with LLM
+            result = await self._execute_llm_call(prompt, inputs.user_configuration)
+            
+            if streaming_callback:
+                streaming_callback(result)
+            
+            return result
+        except Exception as e:
+            self.logger.error(f"Enhanced reasoning execution failed: {e}")
+            # Return fallback response
+            return json.dumps({
+                "reasoning": f"Error in reasoning: {str(e)}",
+                "selected_tools": [],
+                "execution_plan": {},
+                "dependencies": {},
+                "expected_outcome": "Unable to complete reasoning due to error",
+                "confidence": 0.1,
+                "fallback_options": ["Manual intervention required"]
+            })
+
+    def _parse_enhanced_reasoning_result(self, result: str) -> Dict[str, Any]:
+        """Parse the enhanced structured reasoning result."""
+        try:
+            # Try to parse as JSON first
+            if result.strip().startswith('{'):
+                return json.loads(result)
+            
+            # If not JSON, try to extract JSON from text
+            import re
+            json_match = re.search(r'\{.*\}', result, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group())
+            
+            # Fallback: create structure from text
+            return {
+                "reasoning": result,
+                "selected_tools": [],
+                "execution_plan": {},
+                "dependencies": {},
+                "expected_outcome": "Parsed from unstructured response",
+                "confidence": 0.5,
+                "fallback_options": []
+            }
+            
+        except json.JSONDecodeError as e:
+            self.logger.warning(f"Failed to parse reasoning result as JSON: {e}")
+            return {
+                "reasoning": result,
+                "selected_tools": [],
+                "execution_plan": {},
+                "dependencies": {},
+                "expected_outcome": "Failed to parse structured response",
+                "confidence": 0.3,
+                "fallback_options": ["Retry with different approach"]
+            }
+
+    async def _execute_selected_tools(self, parsed_result: Dict[str, Any], workflow_memory: WorkflowMemory) -> List[ToolExecutionResult]:
+        """Execute the selected tools using the ToolOrchestrator."""
+        if not self.tool_orchestrator:
+            return []
+        
+        selected_tools = parsed_result.get('selected_tools', [])
+        execution_plan_data = parsed_result.get('execution_plan', {})
+        
+        if not selected_tools:
+            return []
+        
+        try:
+            # Create execution plan
+            execution_plan = await self.tool_orchestrator.create_execution_plan(
+                selected_tools=selected_tools,
+                parameters=execution_plan_data,
+                context={
+                    'workflow_memory': workflow_memory.global_context,
+                    'user_request': workflow_memory.global_context.get('user_request', ''),
+                    'brain_reasoning': parsed_result.get('reasoning', '')
+                }
+            )
+            
+            # Execute the plan
+            results = await self.tool_orchestrator.execute_tool_sequence(
+                execution_plan=execution_plan,
+                workflow_context=workflow_memory.global_context
+            )
+            
+            return results
+            
+        except Exception as e:
+            self.logger.error(f"Tool execution failed: {e}")
+            return []
+
+    def _update_enhanced_context_memory(self, parsed_result: Dict[str, Any], inputs: NodeInputs, tool_results: List[ToolExecutionResult]):
+        """Update context memory with enhanced information."""
+        decision_record = {
+            "timestamp": datetime.now().isoformat(),
+            "reasoning": parsed_result.get("reasoning", ""),
+            "selected_tools": parsed_result.get("selected_tools", []),
+            "confidence": parsed_result.get("confidence", 0.0),
+            "user_request": self._extract_user_request(inputs),
+            "tool_results": len(tool_results),
+            "successful_tools": len([r for r in tool_results if r.status.value == 'success'])
+        }
+        
+        self.decision_history.append(decision_record)
+        
+        # Keep only last 10 decisions
+        if len(self.decision_history) > 10:
+            self.decision_history = self.decision_history[-10:]
+        
+        # Update tool performance cache
+        for result in tool_results:
+            if result.tool_name not in self.tool_performance_cache:
+                self.tool_performance_cache[result.tool_name] = []
+            
+            self.tool_performance_cache[result.tool_name] = {
+                "last_execution_time": result.execution_time,
+                "last_status": result.status.value,
+                "timestamp": result.timestamp
+            }
+
+    def _calculate_enhanced_confidence(self, parsed_result: Dict[str, Any], tool_results: List[ToolExecutionResult]) -> float:
+        """Calculate confidence score based on reasoning quality and tool execution success."""
+        base_confidence = parsed_result.get("confidence", 0.5)
+        
+        if tool_results:
+            success_rate = len([r for r in tool_results if r.status.value == 'success']) / len(tool_results)
+            # Adjust confidence based on tool execution success
+            adjusted_confidence = (base_confidence + success_rate) / 2
+        else:
+            adjusted_confidence = base_confidence
+        
+        # Factor in reasoning quality
+        reasoning_length = len(parsed_result.get("reasoning", ""))
+        if reasoning_length > 100:  # Good detailed reasoning
+            adjusted_confidence += 0.1
+        elif reasoning_length < 50:  # Sparse reasoning
+            adjusted_confidence -= 0.1
+        
+        return max(0.0, min(1.0, adjusted_confidence))
+
+    def _assess_enhanced_reasoning_quality(self, parsed_result: Dict[str, Any]) -> str:
+        """Assess the quality of enhanced reasoning."""
+        reasoning = parsed_result.get("reasoning", "")
+        selected_tools = parsed_result.get("selected_tools", [])
+        confidence = parsed_result.get("confidence", 0.0)
+        
+        if len(reasoning) > 200 and len(selected_tools) > 0 and confidence > 0.7:
+            return "excellent"
+        elif len(reasoning) > 100 and confidence > 0.5:
+            return "good"
+        elif len(reasoning) > 50:
+            return "fair"
+        else:
+            return "poor"
+
+    def _extract_tool_calls_from_results(self, tool_results: List[ToolExecutionResult]) -> List[str]:
+        """Extract tool calls from execution results."""
+        return [f"{r.tool_name}:{r.status.value}" for r in tool_results]
         
     def _build_brain_prompt(self, inputs: NodeInputs) -> str:
         """
